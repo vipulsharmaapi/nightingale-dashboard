@@ -281,8 +281,8 @@
       <div class="row">
         <label>Domain</label>
         <select id="domainMode" style="flex:2">
-          <option value="auto" selected>Auto (from data)</option>
-          <option value="auto0">Auto, start at 0</option>
+          <option value="auto" selected>Auto (always includes 0)</option>
+          <option value="snug">Auto snug (skip 0; for line-style)</option>
           <option value="manual">Manual</option>
         </select>
       </div>
@@ -891,8 +891,14 @@ function render(){
 
   const vals = data.map(d=>+d.value);
   let dMin = d3.min(vals), dMax = d3.max(vals);
-  if(c.domainMode==="auto0"){ dMin = Math.min(0, dMin); dMax = Math.max(0, dMax); }
-  if(c.domainMode==="manual"){ dMin = c.domainMin; dMax = c.domainMax; }
+  if(c.domainMode==="auto"){
+    // Bar charts MUST include 0 in the domain — otherwise vScale(0) is outside
+    // the range and bars overshoot the baseline.
+    dMin = Math.min(0, dMin); dMax = Math.max(0, dMax);
+  } else if(c.domainMode==="manual"){
+    dMin = c.domainMin; dMax = c.domainMax;
+  }
+  // "snug" mode keeps the raw min/max — opt-in only.
 
   let vScale;
   if(c.scaleType==="linear") vScale = d3.scaleLinear().domain([dMin,dMax]).nice();
