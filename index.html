@@ -138,9 +138,16 @@
   <!-- CENTER: CHART STAGE -->
   <main class="stage">
     <div class="stage-toolbar">
-      <button id="downloadPng">PNG</button>
+      <select id="pngScale" title="PNG resolution multiplier" style="padding:5px 6px">
+        <option value="1">1x</option>
+        <option value="2" selected>2x (HD)</option>
+        <option value="3">3x</option>
+        <option value="4">4x (Print)</option>
+        <option value="6">6x</option>
+        <option value="8">8x (Max)</option>
+      </select>
+      <button id="downloadPng">Download PNG</button>
       <button id="downloadSvg">SVG</button>
-      <button id="downloadHiPng">PNG @2x</button>
     </div>
     <div class="stage-inner">
       <svg id="chart"></svg>
@@ -1017,17 +1024,29 @@ function downloadSvg(){
 }
 function downloadPng(scale=1){
   const c = cfg();
-  const svgStr = svgString();
+  let svgStr = svgString();
+  // Force the SVG to be intrinsically at the target resolution so the browser
+  // rasterizes vectors directly at that size instead of upscaling a bitmap.
+  const targetW = c.width*scale, targetH = c.height*scale;
+  svgStr = svgStr.replace(/<svg\b([^>]*)>/, (m,attrs)=>{
+    const cleaned = attrs.replace(/\swidth="[^"]*"/,"").replace(/\sheight="[^"]*"/,"");
+    const vb = /viewBox="/.test(cleaned) ? "" : ` viewBox="0 0 ${c.width} ${c.height}"`;
+    return `<svg${cleaned} width="${targetW}" height="${targetH}"${vb}>`;
+  });
   const img = new Image();
+  img.crossOrigin = "anonymous";
   img.onload = ()=>{
     const canvas = document.createElement("canvas");
-    canvas.width = c.width*scale; canvas.height = c.height*scale;
+    canvas.width = targetW; canvas.height = targetH;
     const ctx = canvas.getContext("2d");
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
     if(!c.bgTransparent){ctx.fillStyle=c.bgColor;ctx.fillRect(0,0,canvas.width,canvas.height);}
-    ctx.drawImage(img,0,0,canvas.width,canvas.height);
-    canvas.toBlob(b=>downloadBlob(b,`nightingale${scale>1?"@"+scale+"x":""}.png`));
+    ctx.drawImage(img,0,0,targetW,targetH);
+    canvas.toBlob(b=>downloadBlob(b,`nightingale${scale>1?"@"+scale+"x":""}.png`),"image/png",1.0);
   };
-  img.src = "data:image/svg+xml;base64,"+btoa(unescape(encodeURIComponent(svgStr)));
+  img.onerror = ()=>alert("PNG export failed. Try a smaller scale.");
+  img.src = "data:image/svg+xml;charset=utf-8,"+encodeURIComponent(svgStr);
 }
 
 /* ============================================================
@@ -1165,8 +1184,10 @@ document.getElementById("jsonFile").addEventListener("change",e=>{
   });
 });
 
-document.getElementById("downloadPng").addEventListener("click",()=>downloadPng(1));
-document.getElementById("downloadHiPng").addEventListener("click",()=>downloadPng(2));
+document.getElementById("downloadPng").addEventListener("click",()=>{
+  const s = +document.getElementById("pngScale").value || 2;
+  downloadPng(s);
+});
 document.getElementById("downloadSvg").addEventListener("click",downloadSvg);
 
 // init
