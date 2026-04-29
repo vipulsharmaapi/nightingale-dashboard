@@ -1,0 +1,1397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Bar Chart Dashboard — Chart Studio</title>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<style>
+  :root{
+    --bg:#f5f6f8;
+    --panel:#ffffff;
+    --panel-2:#f0f2f5;
+    --border:#e1e4ea;
+    --text:#1f2330;
+    --muted:#6b7280;
+    --accent:#6d4cff;
+    --accent-2:#0ea5b7;
+    --danger:#dc2626;
+    --ok:#059669;
+    --stage:#fafbfc;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;font-size:13px}
+  .topnav{display:flex;align-items:center;background:var(--panel);border-bottom:1px solid var(--border);padding:0 16px;gap:4px;height:46px;flex-shrink:0}
+  .topnav-brand{font-weight:600;margin-right:18px;color:var(--text);font-size:14px;letter-spacing:.02em}
+  .topnav-link{color:var(--muted);text-decoration:none;padding:7px 14px;border-radius:6px;font-size:13px;transition:background .12s,color .12s}
+  .topnav-link:hover{background:var(--panel-2);color:var(--text)}
+  .topnav-link.active{background:var(--accent);color:white}
+  .topnav-spacer{flex:1}
+  .topnav-meta{color:var(--muted);font-size:12px}
+  .app{display:grid;grid-template-columns:340px 1fr 320px;height:calc(100vh - 46px);overflow:hidden}
+  .panel{background:var(--panel);border-right:1px solid var(--border);overflow-y:auto}
+  .panel.right{border-right:none;border-left:1px solid var(--border)}
+  .stage{display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--stage);position:relative;overflow:auto}
+  .stage-inner{padding:24px;display:flex;align-items:center;justify-content:center;width:100%;height:100%}
+  h1{font-size:14px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin:0;padding:16px 16px 8px;border-bottom:1px solid var(--border)}
+  .group{padding:12px 16px;border-bottom:1px solid var(--border)}
+  .group h2{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 10px;font-weight:600}
+  .row{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+  .row label{flex:1;color:var(--muted);font-size:12px}
+  .row .val{color:var(--text);font-variant-numeric:tabular-nums;min-width:42px;text-align:right;font-size:12px}
+  input[type="text"],input[type="number"],select,textarea{
+    background:var(--panel-2);border:1px solid var(--border);color:var(--text);
+    border-radius:6px;padding:6px 8px;font-size:12px;font-family:inherit;width:100%;
+  }
+  input[type="text"]:focus,input[type="number"]:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
+  input[type="range"]{flex:2;accent-color:var(--accent)}
+  input[type="checkbox"]{accent-color:var(--accent)}
+  .hex-wrap{display:inline-flex;align-items:center;gap:6px;background:var(--panel-2);border:1px solid var(--border);border-radius:6px;padding:2px 6px;height:26px}
+  .hex-wrap.invalid{border-color:var(--danger)}
+  .hex-sw{width:14px;height:14px;border-radius:3px;border:1px solid var(--border);flex-shrink:0}
+  .hex-input{background:transparent;border:none;color:var(--text);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;width:64px;padding:0;text-transform:lowercase}
+  .hex-input:focus{outline:none}
+  td .hex-wrap{padding:1px 4px;height:22px}
+  td .hex-input{width:54px;font-size:10px}
+  button{background:var(--panel-2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px 10px;font-size:12px;cursor:pointer;font-family:inherit}
+  button:hover{border-color:var(--accent)}
+  button.primary{background:var(--accent);border-color:var(--accent);color:white}
+  button.danger{color:var(--danger);border-color:transparent;background:transparent;padding:4px 6px}
+  button.danger:hover{background:rgba(220,38,38,.1)}
+  .btn-row{display:flex;gap:6px;flex-wrap:wrap}
+  table{width:100%;border-collapse:collapse;font-size:12px}
+  th,td{padding:4px;text-align:left;border-bottom:1px solid var(--border)}
+  th{color:var(--muted);font-weight:500;font-size:11px;text-transform:uppercase;letter-spacing:.05em}
+  td input{padding:4px 6px;font-size:12px}
+  td.color-cell{width:36px}
+  td.del-cell{width:28px;text-align:center}
+  .palette{display:flex;flex-wrap:wrap;gap:4px}
+  .palette button{padding:0;width:auto;border-radius:4px;overflow:hidden;border:1px solid var(--border);height:22px;display:flex;cursor:pointer}
+  .palette button.active{outline:2px solid var(--accent);outline-offset:1px}
+  .palette button > span{flex:1;height:100%}
+  .seg-toggle{display:flex;background:var(--panel-2);border-radius:6px;padding:2px;border:1px solid var(--border)}
+  .seg-toggle button{flex:1;background:transparent;border:none;color:var(--muted);padding:5px 8px;border-radius:4px;font-size:11px}
+  .seg-toggle button.active{background:var(--accent);color:white}
+  .hint{color:var(--muted);font-size:11px;margin:4px 0 0;line-height:1.4}
+  .stage-toolbar{position:absolute;top:12px;right:12px;display:flex;gap:6px;z-index:10}
+  .stage-toolbar button{background:rgba(255,255,255,.95);backdrop-filter:blur(6px);box-shadow:0 1px 3px rgba(0,0,0,.06)}
+  .chart-tooltip{position:absolute;pointer-events:none;background:rgba(255,255,255,.98);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:12px;color:var(--text);box-shadow:0 8px 24px rgba(0,0,0,.12);opacity:0;transition:opacity .12s;z-index:20}
+  details{margin-bottom:8px}
+  details summary{cursor:pointer;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.05em;padding:4px 0;user-select:none}
+  details summary:hover{color:var(--text)}
+  details[open] summary{color:var(--text);margin-bottom:8px}
+  textarea{min-height:100px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;resize:vertical}
+  .scroll-x{overflow-x:auto}
+  .num-input{width:70px}
+  .preset-row{display:flex;gap:4px;flex-wrap:wrap}
+  .preset-row button{font-size:11px;padding:3px 8px}
+</style>
+</head>
+<body>
+<nav class="topnav">
+  <div class="topnav-brand">Chart Studio</div>
+  <a href="index.html" class="topnav-link">Nightingale Rose</a>
+  <a href="bar.html" class="topnav-link active">Bar Chart</a>
+  <div class="topnav-spacer"></div>
+  <span class="topnav-meta">Drag stage to pan · scroll to zoom</span>
+</nav>
+<div class="app">
+  <!-- LEFT: DATA -->
+  <aside class="panel">
+    <h1>Data</h1>
+    <div class="group">
+      <h2>Bars</h2>
+      <div class="scroll-x">
+        <table id="dataTable">
+          <thead><tr><th></th><th>Label</th><th>Value</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="btn-row" style="margin-top:8px">
+        <button id="addRow">+ Add row</button>
+        <button id="sortDesc">Sort ↓</button>
+        <button id="sortAsc">Sort ↑</button>
+        <button id="reverseBtn">Reverse</button>
+      </div>
+    </div>
+
+    <div class="group">
+      <h2>Presets</h2>
+      <div class="preset-row">
+        <button data-preset="revenue">Revenue</button>
+        <button data-preset="months">Monthly</button>
+        <button data-preset="countries">Countries</button>
+        <button data-preset="languages">Languages</button>
+        <button data-preset="negatives">Mixed signs</button>
+      </div>
+    </div>
+
+    <div class="group">
+      <h2>Import / Export</h2>
+      <details open>
+        <summary>Paste CSV / TSV (auto-loads)</summary>
+        <textarea id="csvInput" placeholder="Apple,180&#10;Google,140&#10;or tab-separated:&#10;Apple&#9;180"></textarea>
+        <div class="btn-row" style="margin-top:6px">
+          <button id="dumpCsv">Copy current as CSV</button>
+        </div>
+      </details>
+      <details>
+        <summary>Config JSON</summary>
+        <div class="btn-row" style="margin-top:6px">
+          <button id="exportJson">Export config</button>
+          <button id="importJson">Import config</button>
+          <input type="file" id="jsonFile" accept="application/json" hidden>
+        </div>
+      </details>
+    </div>
+  </aside>
+
+  <!-- CENTER: STAGE -->
+  <main class="stage">
+    <div class="stage-toolbar">
+      <button id="zoomOut" title="Zoom out">−</button>
+      <button id="resetView" title="Reset view (or double-click stage)">⟲</button>
+      <button id="zoomIn" title="Zoom in">+</button>
+      <select id="pngScale" title="PNG resolution multiplier" style="padding:5px 6px">
+        <option value="1">1x</option>
+        <option value="2" selected>2x (HD)</option>
+        <option value="3">3x</option>
+        <option value="4">4x (Print)</option>
+        <option value="6">6x</option>
+        <option value="8">8x (Max)</option>
+      </select>
+      <button id="downloadPng">Download PNG</button>
+      <button id="downloadSvg">SVG</button>
+    </div>
+    <div class="stage-inner">
+      <svg id="chart"></svg>
+    </div>
+    <div class="chart-tooltip" id="tooltip"></div>
+  </main>
+
+  <!-- RIGHT: CUSTOMIZATION -->
+  <aside class="panel right">
+    <h1>Customization</h1>
+
+    <div class="group">
+      <h2>Title</h2>
+      <div class="row"><input type="text" id="title" placeholder="Chart title" value="Bar Chart"></div>
+      <div class="row"><input type="text" id="subtitle" placeholder="Subtitle"></div>
+      <div class="row">
+        <label>Title size</label>
+        <input type="range" id="titleSize" min="10" max="48" value="22">
+        <span class="val" id="titleSizeV"></span>
+      </div>
+      <div class="row">
+        <label>Title color</label>
+        <span class="hex-wrap"><span class="hex-sw" style="background:#1f2330"></span><input type="text" id="titleColor" class="hex-input hex" value="#1f2330" maxlength="7"></span>
+        <label style="flex:0">Bold</label>
+        <input type="checkbox" id="titleBold" checked>
+      </div>
+      <div class="row">
+        <label>Subtitle size</label>
+        <input type="range" id="subtitleSize" min="8" max="24" value="13">
+        <span class="val" id="subtitleSizeV"></span>
+      </div>
+      <div class="row">
+        <label>Subtitle color</label>
+        <span class="hex-wrap"><span class="hex-sw" style="background:#8a93a6"></span><input type="text" id="subtitleColor" class="hex-input hex" value="#8a93a6" maxlength="7"></span>
+        <label style="flex:0">Position</label>
+        <select id="titlePos" style="flex:1">
+          <option value="top" selected>Top</option>
+          <option value="bottom">Bottom</option>
+          <option value="none">Hidden</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="group">
+      <h2>Geometry</h2>
+      <div class="row">
+        <label>Orientation</label>
+        <div class="seg-toggle" style="flex:2" id="orientToggle">
+          <button data-o="vertical" class="active">Vertical</button>
+          <button data-o="horizontal">Horizontal</button>
+        </div>
+      </div>
+      <div class="row">
+        <label>Width</label>
+        <input type="range" id="width" min="300" max="1600" value="800">
+        <span class="val" id="widthV"></span>
+      </div>
+      <div class="row">
+        <label>Height</label>
+        <input type="range" id="height" min="200" max="1200" value="500">
+        <span class="val" id="heightV"></span>
+      </div>
+      <div class="row">
+        <label>Bar padding</label>
+        <input type="range" id="barPad" min="0" max="0.9" step="0.02" value="0.2">
+        <span class="val" id="barPadV"></span>
+      </div>
+      <div class="row">
+        <label>Outer pad</label>
+        <input type="range" id="outerPad" min="0" max="0.5" step="0.02" value="0.1">
+        <span class="val" id="outerPadV"></span>
+      </div>
+      <div class="row">
+        <label>Corner radius</label>
+        <input type="range" id="cornerRadius" min="0" max="40" value="4">
+        <span class="val" id="cornerRadiusV"></span>
+      </div>
+      <div class="row">
+        <label>Round which</label>
+        <select id="cornerSide">
+          <option value="top" selected>Top only (toward value)</option>
+          <option value="all">All four corners</option>
+        </select>
+      </div>
+      <div class="row">
+        <label>Margin top</label>
+        <input type="range" id="marginTop" min="20" max="160" value="60">
+        <span class="val" id="marginTopV"></span>
+      </div>
+      <div class="row">
+        <label>Margin right</label>
+        <input type="range" id="marginRight" min="10" max="160" value="30">
+        <span class="val" id="marginRightV"></span>
+      </div>
+      <div class="row">
+        <label>Margin bottom</label>
+        <input type="range" id="marginBottom" min="20" max="200" value="60">
+        <span class="val" id="marginBottomV"></span>
+      </div>
+      <div class="row">
+        <label>Margin left</label>
+        <input type="range" id="marginLeft" min="20" max="200" value="60">
+        <span class="val" id="marginLeftV"></span>
+      </div>
+    </div>
+
+    <div class="group">
+      <h2>Value Scale</h2>
+      <div class="row">
+        <label>Type</label>
+        <select id="scaleType">
+          <option value="linear" selected>Linear</option>
+          <option value="sqrt">Square root</option>
+          <option value="log">Log</option>
+          <option value="pow2">Power 2</option>
+        </select>
+      </div>
+      <div class="row">
+        <label>Domain</label>
+        <select id="domainMode" style="flex:2">
+          <option value="auto" selected>Auto (from data)</option>
+          <option value="auto0">Auto, start at 0</option>
+          <option value="manual">Manual</option>
+        </select>
+      </div>
+      <div class="row" id="domainManualRow" style="display:none">
+        <label>Min</label>
+        <input type="number" id="domainMin" class="num-input" value="0" step="any">
+        <label style="flex:0">Max</label>
+        <input type="number" id="domainMax" class="num-input" value="100" step="any">
+      </div>
+      <div class="row">
+        <label>Tick format</label>
+        <select id="tickFormat">
+          <option value="" selected>Auto</option>
+          <option value=",">Thousands (1,234)</option>
+          <option value=".0%">Percent (45%)</option>
+          <option value=".1%">Percent .1 (45.6%)</option>
+          <option value=".2s">Compact (1.2k, 3.4M)</option>
+          <option value=".3s">Compact .3 (1.23k)</option>
+          <option value="$,">Dollar ($1,234)</option>
+          <option value="$.2s">Dollar compact ($1.2k)</option>
+          <option value="d">Integer</option>
+        </select>
+      </div>
+      <div class="row">
+        <label>Tick count target</label>
+        <input type="number" id="tickCount" class="num-input" min="0" max="20" value="5">
+      </div>
+    </div>
+
+    <div class="group">
+      <h2>Axes</h2>
+      <div class="row">
+        <label>Show value axis</label>
+        <input type="checkbox" id="showValueAxis" checked>
+        <label style="flex:0">Show category axis</label>
+        <input type="checkbox" id="showCategoryAxis" checked>
+      </div>
+      <div class="row">
+        <label>Axis color</label>
+        <span class="hex-wrap"><span class="hex-sw" style="background:#6b7280"></span><input type="text" id="axisColor" class="hex-input hex" value="#6b7280" maxlength="7"></span>
+        <label style="flex:0">Width</label>
+        <input type="number" id="axisWidth" class="num-input" min="0" max="6" step="0.5" value="1">
+      </div>
+      <div class="row">
+        <label>Tick label size</label>
+        <input type="range" id="tickFontSize" min="6" max="20" value="12">
+        <span class="val" id="tickFontSizeV"></span>
+      </div>
+      <div class="row">
+        <label>Tick label color</label>
+        <span class="hex-wrap"><span class="hex-sw" style="background:#6b7280"></span><input type="text" id="tickColor" class="hex-input hex" value="#6b7280" maxlength="7"></span>
+      </div>
+      <div class="row">
+        <label>Category label rotate°</label>
+        <input type="range" id="catRotate" min="-90" max="90" value="0">
+        <span class="val" id="catRotateV"></span>
+      </div>
+      <div class="row">
+        <label>Value axis label</label>
+        <input type="text" id="valueAxisLabel" placeholder="e.g. Revenue">
+      </div>
+      <div class="row">
+        <label>Category axis label</label>
+        <input type="text" id="categoryAxisLabel" placeholder="e.g. Country">
+      </div>
+      <div class="row">
+        <label>Axis label size</label>
+        <input type="range" id="axisLabelSize" min="8" max="24" value="13">
+        <span class="val" id="axisLabelSizeV"></span>
+      </div>
+    </div>
+
+    <div class="group">
+      <h2>Gridlines</h2>
+      <div class="row">
+        <label>Horizontal grid</label>
+        <input type="checkbox" id="gridH" checked>
+        <label style="flex:0">Vertical grid</label>
+        <input type="checkbox" id="gridV">
+      </div>
+      <div class="row">
+        <label>Grid color</label>
+        <span class="hex-wrap"><span class="hex-sw" style="background:#e1e4ea"></span><input type="text" id="gridColor" class="hex-input hex" value="#e1e4ea" maxlength="7"></span>
+        <input type="range" id="gridOpacity" min="0" max="1" step="0.05" value="1" style="flex:1">
+      </div>
+      <div class="row">
+        <label>Dash pattern</label>
+        <select id="gridDash">
+          <option value="">Solid</option>
+          <option value="2 2" selected>Dotted (2 2)</option>
+          <option value="4 4">Dashed (4 4)</option>
+          <option value="6 3">Long dashes</option>
+        </select>
+      </div>
+      <div class="row">
+        <label>Behind bars</label>
+        <input type="checkbox" id="gridBehind" checked>
+      </div>
+    </div>
+
+    <div class="group">
+      <h2>Colors</h2>
+      <div class="row">
+        <label>Mode</label>
+        <div class="seg-toggle" style="flex:2" id="colorModeToggle">
+          <button data-mode="palette" class="active">Palette</button>
+          <button data-mode="bucket">Buckets</button>
+          <button data-mode="custom">Custom</button>
+          <button data-mode="single">Single</button>
+        </div>
+      </div>
+      <div id="paletteWrap">
+        <div class="palette" id="palette"></div>
+        <div class="row" style="margin-top:8px">
+          <label>Reverse</label>
+          <input type="checkbox" id="paletteReverse">
+        </div>
+      </div>
+      <div id="bucketWrap" style="display:none">
+        <table id="bucketTable" style="width:100%">
+          <thead><tr><th>≥ value</th><th>Color</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <div class="btn-row" style="margin-top:6px">
+          <button id="addBucket">+ Add bucket</button>
+          <button id="resetBuckets">Reset</button>
+        </div>
+        <p class="hint">Each row colors values ≥ its threshold.</p>
+      </div>
+      <div class="row" id="singleColorWrap" style="display:none">
+        <label>Color</label>
+        <span class="hex-wrap"><span class="hex-sw" style="background:#6d4cff"></span><input type="text" id="singleColor" class="hex-input hex" value="#6d4cff" maxlength="7"></span>
+      </div>
+      <div class="row">
+        <label>Opacity</label>
+        <input type="range" id="opacity" min="0.1" max="1" step="0.05" value="1">
+        <span class="val" id="opacityV"></span>
+      </div>
+      <div class="row">
+        <label>Stroke</label>
+        <span class="hex-wrap"><span class="hex-sw" style="background:#ffffff"></span><input type="text" id="strokeColor" class="hex-input hex" value="#ffffff" maxlength="7"></span>
+        <input type="range" id="strokeWidth" min="0" max="6" step="0.5" value="0" style="flex:2">
+        <span class="val" id="strokeWidthV"></span>
+      </div>
+      <div class="row">
+        <label>Background</label>
+        <span class="hex-wrap"><span class="hex-sw" style="background:#ffffff"></span><input type="text" id="bgColor" class="hex-input hex" value="#ffffff" maxlength="7"></span>
+        <label style="flex:0">Transparent</label>
+        <input type="checkbox" id="bgTransparent">
+      </div>
+    </div>
+
+    <div class="group">
+      <h2>Gradient</h2>
+      <div class="row">
+        <label>Type</label>
+        <select id="gradientType" style="flex:2">
+          <option value="off" selected>Off</option>
+          <option value="bar-axial">Per-bar (along bar)</option>
+          <option value="bar-cross">Per-bar (across bar)</option>
+          <option value="chart-tb">Chart ↓ top → bottom</option>
+          <option value="chart-bt">Chart ↑ bottom → top</option>
+          <option value="chart-lr">Chart → left to right</option>
+          <option value="chart-rl">Chart ← right to left</option>
+        </select>
+      </div>
+      <div class="row">
+        <label>Fade to</label>
+        <select id="gradientTarget" style="flex:2">
+          <option value="lighter">Lighter shade</option>
+          <option value="darker" selected>Darker shade</option>
+          <option value="transparent">Transparent</option>
+          <option value="white">White</option>
+          <option value="black">Black</option>
+          <option value="custom">Custom color</option>
+        </select>
+      </div>
+      <div class="row" id="gradientCustomRow" style="display:none">
+        <label>Custom color</label>
+        <span class="hex-wrap"><span class="hex-sw" style="background:#ffffff"></span><input type="text" id="gradientCustom" class="hex-input hex" value="#ffffff" maxlength="7"></span>
+      </div>
+      <div class="row">
+        <label>Strength</label>
+        <input type="range" id="gradientStrength" min="0" max="1" step="0.05" value="0.5">
+        <span class="val" id="gradientStrengthV"></span>
+      </div>
+      <div class="row">
+        <label>Reverse</label>
+        <input type="checkbox" id="gradientReverse">
+      </div>
+    </div>
+
+    <div class="group">
+      <h2>Labels</h2>
+      <div class="row">
+        <label>Show labels</label>
+        <input type="checkbox" id="showLabels" checked>
+        <label style="flex:0">Position</label>
+        <select id="labelPos" style="flex:1">
+          <option value="outside" selected>Outside (above)</option>
+          <option value="inside-top">Inside top</option>
+          <option value="inside-base">Inside base</option>
+          <option value="center">Center</option>
+        </select>
+      </div>
+      <div class="row">
+        <label>Show value</label>
+        <input type="checkbox" id="showValues" checked>
+        <label style="flex:0">Show %</label>
+        <input type="checkbox" id="showPct">
+      </div>
+      <div class="row">
+        <label>Font size</label>
+        <input type="range" id="labelSize" min="6" max="24" value="11">
+        <span class="val" id="labelSizeV"></span>
+      </div>
+      <div class="row">
+        <label>Color</label>
+        <span class="hex-wrap"><span class="hex-sw" style="background:#1f2330"></span><input type="text" id="labelColor" class="hex-input hex" value="#1f2330" maxlength="7"></span>
+        <label style="flex:0">Bold</label>
+        <input type="checkbox" id="labelBold">
+      </div>
+      <div class="row">
+        <label>Offset</label>
+        <input type="number" id="labelOffset" class="num-input" min="-50" max="100" value="6">
+        <label style="flex:0">Rotate°</label>
+        <input type="number" id="labelRotate" class="num-input" min="-90" max="90" value="0">
+      </div>
+      <div class="row">
+        <label>Font family</label>
+        <select id="fontFamily">
+          <option value="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif">System</option>
+          <option value="Georgia,serif">Georgia</option>
+          <option value="'Times New Roman',serif">Times</option>
+          <option value="'Courier New',monospace">Courier</option>
+          <option value="Helvetica,Arial,sans-serif">Helvetica</option>
+          <option value="Impact,sans-serif">Impact</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="group">
+      <h2>Effects</h2>
+      <div class="row">
+        <label>Hover highlight</label>
+        <input type="checkbox" id="hoverHighlight" checked>
+        <label style="flex:0">Tooltip</label>
+        <input type="checkbox" id="showTooltip" checked>
+      </div>
+      <div class="row">
+        <label>Animation (ms)</label>
+        <input type="range" id="animMs" min="0" max="2000" step="50" value="700">
+        <span class="val" id="animMsV"></span>
+      </div>
+      <div class="row">
+        <label>Drop shadow</label>
+        <input type="checkbox" id="shadow">
+      </div>
+    </div>
+  </aside>
+</div>
+
+<script>
+/* ============================================================
+   PALETTES & PRESETS
+============================================================ */
+const PALETTES = {
+  Category10: d3.schemeCategory10, Tableau10: d3.schemeTableau10,
+  Set2: d3.schemeSet2, Set3: d3.schemeSet3, Pastel1: d3.schemePastel1, Dark2: d3.schemeDark2,
+  Viridis: d3.quantize(d3.interpolateViridis, 12),
+  Inferno: d3.quantize(d3.interpolateInferno, 12),
+  Magma: d3.quantize(d3.interpolateMagma, 12),
+  Plasma: d3.quantize(d3.interpolatePlasma, 12),
+  Cividis: d3.quantize(d3.interpolateCividis, 12),
+  Turbo: d3.quantize(d3.interpolateTurbo, 12),
+  Warm: d3.quantize(d3.interpolateWarm, 12),
+  Cool: d3.quantize(d3.interpolateCool, 12),
+  Rainbow: d3.quantize(d3.interpolateRainbow, 12),
+  Sinebow: d3.quantize(d3.interpolateSinebow, 12),
+  RdYlBu: d3.quantize(d3.interpolateRdYlBu, 12),
+  Spectral: d3.quantize(d3.interpolateSpectral, 12),
+  BuPu: d3.quantize(d3.interpolateBuPu, 12),
+  YlOrRd: d3.quantize(d3.interpolateYlOrRd, 12),
+};
+
+const PRESETS = {
+  revenue: [
+    {label:"Apple",value:383.3},{label:"Microsoft",value:212.0},{label:"Google",value:307.4},
+    {label:"Amazon",value:574.8},{label:"Meta",value:134.9},{label:"Nvidia",value:60.9},
+    {label:"Tesla",value:96.8}
+  ],
+  months: [
+    {label:"Jan",value:34},{label:"Feb",value:42},{label:"Mar",value:55},{label:"Apr",value:68},
+    {label:"May",value:80},{label:"Jun",value:92},{label:"Jul",value:88},{label:"Aug",value:75},
+    {label:"Sep",value:61},{label:"Oct",value:48},{label:"Nov",value:36},{label:"Dec",value:30}
+  ],
+  countries: [
+    {label:"USA",value:25462},{label:"China",value:17963},{label:"Japan",value:4231},
+    {label:"Germany",value:4072},{label:"India",value:3417},{label:"UK",value:3070},
+    {label:"France",value:2782},{label:"Italy",value:2010},{label:"Canada",value:2139},
+    {label:"Brazil",value:1920}
+  ],
+  languages: [
+    {label:"English",value:1500},{label:"Mandarin",value:1118},{label:"Hindi",value:602},
+    {label:"Spanish",value:548},{label:"French",value:280},{label:"Arabic",value:274},
+    {label:"Bengali",value:272},{label:"Russian",value:258},{label:"Portuguese",value:258},
+    {label:"Urdu",value:230}
+  ],
+  negatives: [
+    {label:"Q1",value:42},{label:"Q2",value:-18},{label:"Q3",value:35},{label:"Q4",value:-8},
+    {label:"Q5",value:51},{label:"Q6",value:22},{label:"Q7",value:-30}
+  ],
+};
+
+const DEFAULT_BUCKETS = [
+  {min:1000, color:"#1f2a6e"},
+  {min:100,  color:"#6b6bb3"},
+  {min:0,    color:"#4a8fcc"}
+];
+
+let state = {
+  data: PRESETS.revenue.map(d=>({...d,color:null})),
+  palette: "Tableau10",
+  paletteReverse: false,
+  colorMode: "palette",
+  orientation: "vertical",
+  buckets: DEFAULT_BUCKETS.map(b=>({...b})),
+};
+
+/* ============================================================
+   READ CONTROLS
+============================================================ */
+function cfg(){
+  const $ = id => document.getElementById(id);
+  return {
+    title: $("title").value,
+    subtitle: $("subtitle").value,
+    titleSize: +$("titleSize").value,
+    titleColor: $("titleColor").value,
+    titleBold: $("titleBold").checked,
+    subtitleSize: +$("subtitleSize").value,
+    subtitleColor: $("subtitleColor").value,
+    titlePos: $("titlePos").value,
+    width: +$("width").value,
+    height: +$("height").value,
+    barPad: +$("barPad").value,
+    outerPad: +$("outerPad").value,
+    cornerRadius: +$("cornerRadius").value,
+    cornerSide: $("cornerSide").value,
+    marginTop: +$("marginTop").value,
+    marginRight: +$("marginRight").value,
+    marginBottom: +$("marginBottom").value,
+    marginLeft: +$("marginLeft").value,
+    scaleType: $("scaleType").value,
+    domainMode: $("domainMode").value,
+    domainMin: +$("domainMin").value,
+    domainMax: +$("domainMax").value,
+    tickFormat: $("tickFormat").value,
+    tickCount: +$("tickCount").value,
+    showValueAxis: $("showValueAxis").checked,
+    showCategoryAxis: $("showCategoryAxis").checked,
+    axisColor: $("axisColor").value,
+    axisWidth: +$("axisWidth").value,
+    tickFontSize: +$("tickFontSize").value,
+    tickColor: $("tickColor").value,
+    catRotate: +$("catRotate").value,
+    valueAxisLabel: $("valueAxisLabel").value,
+    categoryAxisLabel: $("categoryAxisLabel").value,
+    axisLabelSize: +$("axisLabelSize").value,
+    gridH: $("gridH").checked,
+    gridV: $("gridV").checked,
+    gridColor: $("gridColor").value,
+    gridOpacity: +$("gridOpacity").value,
+    gridDash: $("gridDash").value,
+    gridBehind: $("gridBehind").checked,
+    opacity: +$("opacity").value,
+    strokeColor: $("strokeColor").value,
+    strokeWidth: +$("strokeWidth").value,
+    bgColor: $("bgColor").value,
+    bgTransparent: $("bgTransparent").checked,
+    singleColor: $("singleColor").value,
+    showLabels: $("showLabels").checked,
+    labelPos: $("labelPos").value,
+    showValues: $("showValues").checked,
+    showPct: $("showPct").checked,
+    labelSize: +$("labelSize").value,
+    labelColor: $("labelColor").value,
+    labelBold: $("labelBold").checked,
+    labelOffset: +$("labelOffset").value,
+    labelRotate: +$("labelRotate").value,
+    fontFamily: $("fontFamily").value,
+    hoverHighlight: $("hoverHighlight").checked,
+    showTooltip: $("showTooltip").checked,
+    animMs: +$("animMs").value,
+    shadow: $("shadow").checked,
+    gradientType: $("gradientType").value,
+    gradientTarget: $("gradientTarget").value,
+    gradientCustom: $("gradientCustom").value,
+    gradientStrength: +$("gradientStrength").value,
+    gradientReverse: $("gradientReverse").checked,
+  };
+}
+
+/* ============================================================
+   COLOR HELPERS
+============================================================ */
+function currentPaletteColor(i){
+  const arr = PALETTES[state.palette];
+  const idx = state.paletteReverse ? (arr.length-1-(i%arr.length)) : (i%arr.length);
+  return arr[idx];
+}
+function colorForBucket(value){
+  const sorted = [...state.buckets].sort((a,b)=>b.min-a.min);
+  for(const b of sorted){ if(value >= b.min) return b.color; }
+  return sorted[sorted.length-1]?.color || "#888";
+}
+function colorFor(d,i){
+  if(state.colorMode==="single") return cfg().singleColor;
+  if(state.colorMode==="custom" && d.color) return d.color;
+  if(state.colorMode==="bucket") return colorForBucket(+d.value);
+  return currentPaletteColor(i);
+}
+
+/* ============================================================
+   DATA TABLE
+============================================================ */
+function renderTable(){
+  const tbody = document.querySelector("#dataTable tbody");
+  tbody.innerHTML = "";
+  state.data.forEach((d,i)=>{
+    const c0 = d.color||currentPaletteColor(i);
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td class="color-cell"><span class="hex-wrap"><span class="hex-sw" style="background:${c0}"></span><input type="text" class="hex-input hex" value="${c0}" maxlength="7" data-i="${i}" data-k="color"></span></td>
+      <td><input type="text" value="${d.label}" data-i="${i}" data-k="label"></td>
+      <td><input type="number" value="${d.value}" step="any" data-i="${i}" data-k="value"></td>
+      <td class="del-cell"><button class="danger" data-del="${i}" title="Remove">×</button></td>`;
+    tbody.appendChild(tr);
+  });
+  tbody.querySelectorAll("input").forEach(inp=>{
+    inp.addEventListener("input",e=>{
+      const i=+e.target.dataset.i, k=e.target.dataset.k;
+      let v=e.target.value;
+      if(k==="color"){
+        if(!/^#[0-9a-fA-F]{6}$/.test(v)){
+          e.target.parentElement.classList.add("invalid"); return;
+        }
+        e.target.parentElement.classList.remove("invalid");
+        const sw=e.target.parentElement.querySelector(".hex-sw");
+        if(sw) sw.style.background=v;
+        state.data[i].color=v;
+        state.colorMode="custom"; syncColorModeUI();
+      } else {
+        if(k==="value") v=+v;
+        state.data[i][k]=v;
+      }
+      render();
+    });
+  });
+  tbody.querySelectorAll("[data-del]").forEach(btn=>{
+    btn.addEventListener("click",e=>{
+      const i=+e.target.dataset.del;
+      state.data.splice(i,1);
+      renderTable();render();
+    });
+  });
+}
+
+function renderPalette(){
+  const wrap = document.getElementById("palette");
+  wrap.innerHTML = "";
+  Object.entries(PALETTES).forEach(([name,colors])=>{
+    const btn = document.createElement("button");
+    btn.title = name;
+    btn.className = name===state.palette ? "active":"";
+    colors.slice(0,8).forEach(c=>{
+      const sp = document.createElement("span"); sp.style.background=c; btn.appendChild(sp);
+    });
+    btn.addEventListener("click",()=>{
+      state.palette = name; state.colorMode="palette";
+      syncColorModeUI(); renderPalette(); renderTable(); render();
+    });
+    wrap.appendChild(btn);
+  });
+}
+function syncColorModeUI(){
+  document.querySelectorAll("#colorModeToggle button").forEach(b=>{
+    b.classList.toggle("active", b.dataset.mode===state.colorMode);
+  });
+  document.getElementById("paletteWrap").style.display = state.colorMode==="palette"?"":"none";
+  document.getElementById("singleColorWrap").style.display = state.colorMode==="single"?"":"none";
+  document.getElementById("bucketWrap").style.display = state.colorMode==="bucket"?"":"none";
+}
+function renderBucketTable(){
+  const tbody = document.querySelector("#bucketTable tbody");
+  tbody.innerHTML = "";
+  state.buckets.sort((a,b)=>b.min-a.min);
+  state.buckets.forEach((b,i)=>{
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td><input type="number" value="${b.min}" step="any" data-bi="${i}" data-bk="min"></td>
+      <td><span class="hex-wrap"><span class="hex-sw" style="background:${b.color}"></span><input type="text" class="hex-input hex" value="${b.color}" maxlength="7" data-bi="${i}" data-bk="color"></span></td>
+      <td class="del-cell"><button class="danger" data-bdel="${i}" title="Remove">×</button></td>`;
+    tbody.appendChild(tr);
+  });
+  tbody.querySelectorAll("input").forEach(inp=>{
+    inp.addEventListener("input",e=>{
+      const i=+e.target.dataset.bi, k=e.target.dataset.bk;
+      let v=e.target.value;
+      if(k==="color"){
+        if(!/^#[0-9a-fA-F]{6}$/.test(v)){
+          e.target.parentElement.classList.add("invalid"); return;
+        }
+        e.target.parentElement.classList.remove("invalid");
+        const sw=e.target.parentElement.querySelector(".hex-sw");
+        if(sw) sw.style.background=v;
+        state.buckets[i].color=v;
+      } else { state.buckets[i].min=+v; }
+      render();
+    });
+  });
+  tbody.querySelectorAll("[data-bdel]").forEach(btn=>{
+    btn.addEventListener("click",e=>{
+      state.buckets.splice(+e.target.dataset.bdel,1);
+      renderBucketTable(); render();
+    });
+  });
+}
+
+/* ============================================================
+   GRADIENT
+============================================================ */
+function computeFadeColor(baseHex, c){
+  const s = c.gradientStrength;
+  const base = d3.color(baseHex);
+  switch(c.gradientTarget){
+    case "lighter":     return {color: base.brighter(s*2.2).formatHex(), opacity: 1};
+    case "darker":      return {color: base.darker(s*2.2).formatHex(),  opacity: 1};
+    case "transparent": return {color: baseHex,                          opacity: 1 - s};
+    case "white":       return {color: d3.interpolateRgb(baseHex,"#ffffff")(s), opacity: 1};
+    case "black":       return {color: d3.interpolateRgb(baseHex,"#000000")(s), opacity: 1};
+    case "custom":      return {color: d3.interpolateRgb(baseHex,c.gradientCustom||"#ffffff")(s), opacity: 1};
+    default:            return {color: baseHex, opacity: 1};
+  }
+}
+
+/* ============================================================
+   RENDER
+============================================================ */
+const tooltip = document.getElementById("tooltip");
+
+function render(){
+  const c = cfg();
+  const data = state.data.filter(d=>!isNaN(+d.value));
+  const svg = d3.select("#chart")
+    .attr("width", c.width).attr("height", c.height)
+    .attr("viewBox", `0 0 ${c.width} ${c.height}`)
+    .style("background", c.bgTransparent?"transparent":c.bgColor)
+    .style("font-family", c.fontFamily);
+  svg.selectAll("*").remove();
+  if(!data.length) return;
+
+  const defs = svg.append("defs");
+  if(c.shadow){
+    const f = defs.append("filter").attr("id","b-shadow")
+      .attr("x","-50%").attr("y","-50%").attr("width","200%").attr("height","200%");
+    f.append("feGaussianBlur").attr("in","SourceAlpha").attr("stdDeviation",3);
+    f.append("feOffset").attr("dx",0).attr("dy",2).attr("result","off");
+    const fm = f.append("feMerge");
+    fm.append("feMergeNode"); fm.append("feMergeNode").attr("in","SourceGraphic");
+  }
+
+  const m = {top:c.marginTop, right:c.marginRight, bottom:c.marginBottom, left:c.marginLeft};
+  const innerW = Math.max(50, c.width - m.left - m.right);
+  const innerH = Math.max(50, c.height - m.top - m.bottom);
+  const isVertical = state.orientation === "vertical";
+
+  // title / subtitle
+  if(c.titlePos!=="none"){
+    const ty = c.titlePos==="top" ? 18 + c.titleSize*0.6 : c.height - 8 - (c.subtitle?c.subtitleSize+8:0);
+    if(c.title){
+      svg.append("text").attr("x",c.width/2).attr("y",ty).attr("text-anchor","middle")
+        .attr("fill",c.titleColor).attr("font-size",c.titleSize)
+        .attr("font-weight",c.titleBold?700:500).text(c.title);
+    }
+    if(c.subtitle){
+      const sy = c.titlePos==="top" ? ty + c.subtitleSize + 4 : c.height - 8;
+      svg.append("text").attr("x",c.width/2).attr("y",sy).attr("text-anchor","middle")
+        .attr("fill",c.subtitleColor).attr("font-size",c.subtitleSize).text(c.subtitle);
+    }
+  }
+
+  const g = svg.append("g").attr("transform",`translate(${m.left},${m.top})`);
+  if(c.shadow) g.attr("filter","url(#b-shadow)");
+
+  // scales
+  const cats = data.map(d=>d.label);
+  const cScale = d3.scaleBand().domain(cats)
+    .range(isVertical?[0,innerW]:[0,innerH])
+    .paddingInner(c.barPad).paddingOuter(c.outerPad);
+
+  const vals = data.map(d=>+d.value);
+  let dMin = d3.min(vals), dMax = d3.max(vals);
+  if(c.domainMode==="auto0"){ dMin = Math.min(0, dMin); dMax = Math.max(0, dMax); }
+  if(c.domainMode==="manual"){ dMin = c.domainMin; dMax = c.domainMax; }
+
+  let vScale;
+  if(c.scaleType==="linear") vScale = d3.scaleLinear().domain([dMin,dMax]).nice();
+  else if(c.scaleType==="sqrt") vScale = d3.scaleSqrt().domain([Math.max(0,dMin),Math.max(0,dMax)]).nice();
+  else if(c.scaleType==="log") vScale = d3.scaleLog().domain([Math.max(dMin,1e-6),Math.max(dMax,1e-5)]).clamp(true);
+  else vScale = d3.scalePow().exponent(2).domain([dMin,dMax]).nice();
+  vScale.range(isVertical ? [innerH,0] : [0,innerW]);
+
+  const ticks = vScale.ticks ? vScale.ticks(c.tickCount) : vScale.domain();
+  const fmt = c.tickFormat ? d3.format(c.tickFormat) : (v=>v);
+
+  // gridlines (behind bars)
+  const drawGrid = ()=>{
+    const grid = g.append("g").attr("class","grid")
+      .attr("opacity", c.gridOpacity).attr("pointer-events","none");
+    if(c.gridH){
+      ticks.forEach(t=>{
+        const y = isVertical ? vScale(t) : null;
+        const x = isVertical ? null : vScale(t);
+        if(isVertical){
+          grid.append("line").attr("x1",0).attr("x2",innerW).attr("y1",y).attr("y2",y)
+            .attr("stroke",c.gridColor).attr("stroke-dasharray",c.gridDash);
+        } else {
+          grid.append("line").attr("y1",0).attr("y2",innerH).attr("x1",x).attr("x2",x)
+            .attr("stroke",c.gridColor).attr("stroke-dasharray",c.gridDash);
+        }
+      });
+    }
+    if(c.gridV){
+      cats.forEach(cat=>{
+        const p = cScale(cat) + cScale.bandwidth()/2;
+        if(isVertical){
+          grid.append("line").attr("x1",p).attr("x2",p).attr("y1",0).attr("y2",innerH)
+            .attr("stroke",c.gridColor).attr("stroke-dasharray",c.gridDash);
+        } else {
+          grid.append("line").attr("y1",p).attr("y2",p).attr("x1",0).attr("x2",innerW)
+            .attr("stroke",c.gridColor).attr("stroke-dasharray",c.gridDash);
+        }
+      });
+    }
+  };
+  if(c.gridBehind) drawGrid();
+
+  // gradients
+  const totalAbs = d3.sum(data, d=>Math.abs(+d.value));
+  function gradientFor(d, i, baseColor){
+    if(c.gradientType==="off") return baseColor;
+    const id = `b-grad-${i}`;
+    const fade = computeFadeColor(baseColor, c);
+    const startC = c.gradientReverse ? fade.color : baseColor;
+    const endC   = c.gradientReverse ? baseColor  : fade.color;
+    const startOp= c.gradientReverse ? fade.opacity : 1;
+    const endOp  = c.gradientReverse ? 1 : fade.opacity;
+    let grad;
+    if(c.gradientType.startsWith("bar-")){
+      // Per-bar object-bbox gradient, axial = along bar length
+      const axial = c.gradientType === "bar-axial";
+      let coords;
+      if(isVertical){
+        coords = axial ? {x1:0,y1:1,x2:0,y2:0} : {x1:0,y1:0,x2:1,y2:0};
+      } else {
+        coords = axial ? {x1:0,y1:0,x2:1,y2:0} : {x1:0,y1:0,x2:0,y2:1};
+      }
+      grad = defs.append("linearGradient").attr("id",id)
+        .attr("x1",coords.x1).attr("y1",coords.y1).attr("x2",coords.x2).attr("y2",coords.y2);
+    } else {
+      const dirs = {
+        "chart-tb": {x1:0,y1:0, x2:0,y2:innerH},
+        "chart-bt": {x1:0,y1:innerH, x2:0,y2:0},
+        "chart-lr": {x1:0,y1:0, x2:innerW,y2:0},
+        "chart-rl": {x1:innerW,y1:0, x2:0,y2:0},
+      };
+      const cd = dirs[c.gradientType];
+      grad = defs.append("linearGradient").attr("id",id)
+        .attr("x1",cd.x1).attr("y1",cd.y1).attr("x2",cd.x2).attr("y2",cd.y2)
+        .attr("gradientUnits","userSpaceOnUse");
+    }
+    grad.append("stop").attr("offset","0%").attr("stop-color",startC).attr("stop-opacity",startOp);
+    grad.append("stop").attr("offset","100%").attr("stop-color",endC).attr("stop-opacity",endOp);
+    return `url(#${id})`;
+  }
+
+  // bar geometry helpers (rounded rect path, optional top-only rounding)
+  function barPath(x,y,w,h,r,side){
+    if(r<=0 || w<=0 || h<=0) return `M${x},${y}h${w}v${h}h${-w}z`;
+    r = Math.min(r, Math.min(w,h)/2);
+    if(side==="all"){
+      return `M${x+r},${y} h${w-2*r} a${r},${r} 0 0 1 ${r},${r} v${h-2*r} a${r},${r} 0 0 1 ${-r},${r} h${-(w-2*r)} a${r},${r} 0 0 1 ${-r},${-r} v${-(h-2*r)} a${r},${r} 0 0 1 ${r},${-r} z`;
+    }
+    // round only the "top" side relative to value direction
+    if(isVertical){
+      // for vertical bars, "top" is towards the value end (which is min y for positive, max y for negative)
+      // We assume positive bars: round top-left & top-right
+      return `M${x},${y+h} v${-(h-r)} a${r},${r} 0 0 1 ${r},${-r} h${w-2*r} a${r},${r} 0 0 1 ${r},${r} v${h-r} z`;
+    } else {
+      // horizontal bars: round right side (where value ends)
+      return `M${x},${y} h${w-r} a${r},${r} 0 0 1 ${r},${r} v${h-2*r} a${r},${r} 0 0 1 ${-r},${r} h${-(w-r)} z`;
+    }
+  }
+
+  // bars
+  const baseLine = vScale(0);
+  const bars = g.append("g").attr("class","bars").selectAll("path").data(data).join("path")
+    .attr("fill",(d,i)=>gradientFor(d,i,colorFor(d,i)))
+    .attr("fill-opacity",c.opacity)
+    .attr("stroke",c.strokeColor)
+    .attr("stroke-width",c.strokeWidth)
+    .attr("d",(d,i)=>{
+      const v = +d.value;
+      const startD = baseLine; // animation start
+      if(isVertical){
+        const x = cScale(d.label);
+        const w = cScale.bandwidth();
+        const y0 = vScale(0), y1 = vScale(v);
+        const top = Math.min(y0,y1), height = Math.abs(y1-y0);
+        const initial = `M${x},${startD}h${w}v0h${-w}z`;
+        return c.animMs>0 ? initial : barPath(x, top, w, height, c.cornerRadius, c.cornerSide);
+      } else {
+        const y = cScale(d.label);
+        const h = cScale.bandwidth();
+        const x0 = vScale(0), x1 = vScale(v);
+        const left = Math.min(x0,x1), width = Math.abs(x1-x0);
+        const initial = `M${startD},${y}h0v${h}h0z`;
+        return c.animMs>0 ? initial : barPath(left, y, width, h, c.cornerRadius, c.cornerSide);
+      }
+    })
+    .style("cursor","pointer");
+
+  if(c.animMs>0){
+    bars.transition().duration(c.animMs).ease(d3.easeCubicOut)
+      .attr("d",(d)=>{
+        const v=+d.value;
+        if(isVertical){
+          const x=cScale(d.label), w=cScale.bandwidth();
+          const y0=vScale(0), y1=vScale(v);
+          return barPath(x, Math.min(y0,y1), w, Math.abs(y1-y0), c.cornerRadius, c.cornerSide);
+        } else {
+          const y=cScale(d.label), h=cScale.bandwidth();
+          const x0=vScale(0), x1=vScale(v);
+          return barPath(Math.min(x0,x1), y, Math.abs(x1-x0), h, c.cornerRadius, c.cornerSide);
+        }
+      });
+  }
+
+  // hover
+  bars.on("mousemove",(ev,d)=>{
+    if(!c.showTooltip) return;
+    const pct = totalAbs ? ((Math.abs(+d.value)/totalAbs)*100).toFixed(1) : "0";
+    tooltip.innerHTML = `<strong>${d.label}</strong><br>Value: ${fmt(+d.value)||(+d.value)}<br>Share: ${pct}%`;
+    tooltip.style.opacity=1;
+    tooltip.style.left=(ev.clientX+12)+"px";
+    tooltip.style.top=(ev.clientY+12)+"px";
+  })
+  .on("mouseleave",()=>tooltip.style.opacity=0)
+  .on("mouseenter",function(){
+    if(!c.hoverHighlight) return;
+    bars.transition().duration(140).attr("fill-opacity",p=>p===d3.select(this).datum()?Math.min(1,c.opacity+0.1):c.opacity*0.4);
+  })
+  .on("mouseout",function(){
+    if(!c.hoverHighlight) return;
+    bars.transition().duration(140).attr("fill-opacity",c.opacity);
+  });
+
+  // gridlines on top of bars (if not behind)
+  if(!c.gridBehind) drawGrid();
+
+  // axes
+  const axisLine = c.axisColor;
+  if(c.showCategoryAxis){
+    const ax = g.append("g").attr("class","axis-cat");
+    if(isVertical){
+      ax.attr("transform",`translate(0,${innerH})`)
+        .call(d3.axisBottom(cScale).tickSize(0).tickPadding(8));
+    } else {
+      ax.call(d3.axisLeft(cScale).tickSize(0).tickPadding(8));
+    }
+    ax.select(".domain").attr("stroke",axisLine).attr("stroke-width",c.axisWidth);
+    ax.selectAll("text").attr("fill",c.tickColor).attr("font-size",c.tickFontSize);
+    if(c.catRotate && isVertical){
+      ax.selectAll("text")
+        .attr("text-anchor", c.catRotate>0 ? "start" : (c.catRotate<0 ? "end" : "middle"))
+        .attr("transform",`rotate(${c.catRotate})`)
+        .attr("dx", c.catRotate>0 ? "0.5em" : (c.catRotate<0 ? "-0.5em" : "0"))
+        .attr("dy","0.35em");
+    }
+  }
+  if(c.showValueAxis){
+    const av = g.append("g").attr("class","axis-val");
+    let axisGen;
+    if(isVertical){
+      axisGen = d3.axisLeft(vScale).ticks(c.tickCount).tickSize(0).tickPadding(8);
+      if(c.tickFormat) axisGen.tickFormat(d3.format(c.tickFormat));
+      av.call(axisGen);
+    } else {
+      av.attr("transform",`translate(0,${innerH})`);
+      axisGen = d3.axisBottom(vScale).ticks(c.tickCount).tickSize(0).tickPadding(8);
+      if(c.tickFormat) axisGen.tickFormat(d3.format(c.tickFormat));
+      av.call(axisGen);
+    }
+    av.select(".domain").attr("stroke",axisLine).attr("stroke-width",c.axisWidth);
+    av.selectAll("text").attr("fill",c.tickColor).attr("font-size",c.tickFontSize);
+  }
+
+  // axis labels
+  if(c.valueAxisLabel){
+    if(isVertical){
+      svg.append("text").attr("x",-(m.top+innerH/2)).attr("y",m.left/2 - 4).attr("transform","rotate(-90)")
+        .attr("text-anchor","middle").attr("fill",c.tickColor).attr("font-size",c.axisLabelSize).text(c.valueAxisLabel);
+    } else {
+      svg.append("text").attr("x",m.left+innerW/2).attr("y",c.height - m.bottom/4)
+        .attr("text-anchor","middle").attr("fill",c.tickColor).attr("font-size",c.axisLabelSize).text(c.valueAxisLabel);
+    }
+  }
+  if(c.categoryAxisLabel){
+    if(isVertical){
+      svg.append("text").attr("x",m.left+innerW/2).attr("y",c.height - m.bottom/4)
+        .attr("text-anchor","middle").attr("fill",c.tickColor).attr("font-size",c.axisLabelSize).text(c.categoryAxisLabel);
+    } else {
+      svg.append("text").attr("x",-(m.top+innerH/2)).attr("y",m.left/2 - 4).attr("transform","rotate(-90)")
+        .attr("text-anchor","middle").attr("fill",c.tickColor).attr("font-size",c.axisLabelSize).text(c.categoryAxisLabel);
+    }
+  }
+
+  // labels on bars
+  if(c.showLabels){
+    const lg = g.append("g").attr("class","bar-labels").style("pointer-events","none");
+    data.forEach((d,i)=>{
+      const v=+d.value, parts=[];
+      if(c.showValues!==false) parts.push(fmt(v) || v);
+      if(c.showPct && totalAbs) parts.push(((Math.abs(v)/totalAbs)*100).toFixed(1)+"%");
+      const txt = parts.join(" · ");
+      let x,y,anchor="middle",baseline="middle";
+      if(isVertical){
+        x = cScale(d.label) + cScale.bandwidth()/2;
+        const top = Math.min(vScale(0),vScale(v));
+        const bot = Math.max(vScale(0),vScale(v));
+        if(c.labelPos==="outside")     { y = (v>=0 ? top - c.labelOffset : bot + c.labelOffset); baseline=v>=0?"baseline":"hanging"; }
+        else if(c.labelPos==="inside-top"){ y = (v>=0 ? top : bot) + (v>=0 ? c.labelSize+2 : -(c.labelSize+2)); }
+        else if(c.labelPos==="inside-base"){ y = vScale(0) + (v>=0 ? -(c.labelSize/2+4) : c.labelSize+4); }
+        else { y = (top+bot)/2; }
+      } else {
+        y = cScale(d.label) + cScale.bandwidth()/2;
+        const left = Math.min(vScale(0),vScale(v));
+        const right = Math.max(vScale(0),vScale(v));
+        if(c.labelPos==="outside")     { x = (v>=0 ? right + c.labelOffset : left - c.labelOffset); anchor = v>=0 ? "start":"end"; }
+        else if(c.labelPos==="inside-top"){ x = (v>=0 ? right - c.labelOffset : left + c.labelOffset); anchor = v>=0 ? "end":"start"; }
+        else if(c.labelPos==="inside-base"){ x = vScale(0) + (v>=0 ? c.labelOffset : -c.labelOffset); anchor = v>=0 ? "start":"end"; }
+        else { x = (left+right)/2; }
+      }
+      const t = lg.append("text").attr("x",x).attr("y",y)
+        .attr("text-anchor",anchor).attr("dominant-baseline",baseline)
+        .attr("fill",c.labelColor).attr("font-size",c.labelSize)
+        .attr("font-weight",c.labelBold?700:400).text(txt);
+      if(c.labelRotate) t.attr("transform",`rotate(${c.labelRotate},${x},${y})`);
+    });
+  }
+}
+
+/* ============================================================
+   EXPORT
+============================================================ */
+function svgString(){
+  const node = document.getElementById("chart");
+  const clone = node.cloneNode(true);
+  clone.setAttribute("xmlns","http://www.w3.org/2000/svg");
+  return new XMLSerializer().serializeToString(clone);
+}
+function downloadBlob(blob, name){
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = name; a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+}
+function downloadSvg(){
+  const blob = new Blob([svgString()], {type:"image/svg+xml;charset=utf-8"});
+  downloadBlob(blob,"bar-chart.svg");
+}
+function downloadPng(scale=1){
+  const c = cfg();
+  let svgStr = svgString();
+  const targetW = c.width*scale, targetH = c.height*scale;
+  svgStr = svgStr.replace(/<svg\b([^>]*)>/, (m,attrs)=>{
+    const cleaned = attrs.replace(/\swidth="[^"]*"/,"").replace(/\sheight="[^"]*"/,"");
+    const vb = /viewBox="/.test(cleaned) ? "" : ` viewBox="0 0 ${c.width} ${c.height}"`;
+    return `<svg${cleaned} width="${targetW}" height="${targetH}"${vb}>`;
+  });
+  const img = new Image();
+  img.onload = ()=>{
+    const canvas = document.createElement("canvas");
+    canvas.width = targetW; canvas.height = targetH;
+    const ctx = canvas.getContext("2d");
+    ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high";
+    if(!c.bgTransparent){ctx.fillStyle=c.bgColor;ctx.fillRect(0,0,canvas.width,canvas.height);}
+    ctx.drawImage(img,0,0,targetW,targetH);
+    canvas.toBlob(b=>downloadBlob(b,`bar-chart${scale>1?"@"+scale+"x":""}.png`),"image/png",1.0);
+  };
+  img.onerror = ()=>alert("PNG export failed. Try a smaller scale.");
+  img.src = "data:image/svg+xml;charset=utf-8,"+encodeURIComponent(svgStr);
+}
+
+/* ============================================================
+   WIRE UP
+============================================================ */
+function bindRange(id){
+  const el = document.getElementById(id);
+  const v = document.getElementById(id+"V");
+  const upd = ()=>{if(v) v.textContent = el.value;};
+  el.addEventListener("input",()=>{upd();render();});
+  upd();
+}
+[
+  "titleSize","subtitleSize","width","height","barPad","outerPad","cornerRadius",
+  "marginTop","marginRight","marginBottom","marginLeft",
+  "tickFontSize","catRotate","axisLabelSize",
+  "gridOpacity","opacity","strokeWidth","labelSize","animMs","gradientStrength"
+].forEach(bindRange);
+
+document.querySelectorAll("input,select").forEach(el=>{
+  if(el.id==="csvInput"||el.type==="file"||el.classList.contains("hex")) return;
+  el.addEventListener("input",render);
+  el.addEventListener("change",render);
+});
+document.querySelectorAll(".hex").forEach(el=>{
+  if(el.dataset.k==="color"||el.dataset.bk==="color") return;
+  el.addEventListener("input",e=>{
+    const v=e.target.value.trim();
+    if(!/^#[0-9a-fA-F]{6}$/.test(v)){ e.target.parentElement.classList.add("invalid"); return; }
+    e.target.parentElement.classList.remove("invalid");
+    const sw=e.target.parentElement.querySelector(".hex-sw");
+    if(sw) sw.style.background=v;
+    render();
+  });
+});
+
+document.getElementById("addRow").addEventListener("click",()=>{
+  state.data.push({label:"New",value:50,color:null});
+  renderTable();render();
+});
+document.getElementById("sortDesc").addEventListener("click",()=>{
+  state.data.sort((a,b)=>(+b.value)-(+a.value));
+  renderTable();render();
+});
+document.getElementById("sortAsc").addEventListener("click",()=>{
+  state.data.sort((a,b)=>(+a.value)-(+b.value));
+  renderTable();render();
+});
+document.getElementById("reverseBtn").addEventListener("click",()=>{
+  state.data.reverse(); renderTable();render();
+});
+document.querySelectorAll("[data-preset]").forEach(b=>{
+  b.addEventListener("click",()=>{
+    state.data = PRESETS[b.dataset.preset].map(d=>({...d,color:null}));
+    state.colorMode="palette";
+    syncColorModeUI(); renderTable(); render();
+  });
+});
+document.querySelectorAll("#colorModeToggle button").forEach(b=>{
+  b.addEventListener("click",()=>{
+    state.colorMode = b.dataset.mode;
+    syncColorModeUI(); renderTable(); render();
+  });
+});
+document.querySelectorAll("#orientToggle button").forEach(b=>{
+  b.addEventListener("click",()=>{
+    state.orientation = b.dataset.o;
+    document.querySelectorAll("#orientToggle button").forEach(x=>x.classList.toggle("active",x===b));
+    render();
+  });
+});
+document.getElementById("paletteReverse").addEventListener("change",e=>{
+  state.paletteReverse = e.target.checked;
+  renderTable(); render();
+});
+document.getElementById("addBucket").addEventListener("click",()=>{
+  state.buckets.push({min:0,color:"#888888"});
+  renderBucketTable(); render();
+});
+document.getElementById("resetBuckets").addEventListener("click",()=>{
+  state.buckets = DEFAULT_BUCKETS.map(b=>({...b}));
+  renderBucketTable(); render();
+});
+
+// domain manual row visibility
+function syncDomainUI(){
+  document.getElementById("domainManualRow").style.display =
+    document.getElementById("domainMode").value==="manual" ? "" : "none";
+}
+document.getElementById("domainMode").addEventListener("change",syncDomainUI);
+syncDomainUI();
+
+// gradient custom row visibility
+function syncGradientUI(){
+  document.getElementById("gradientCustomRow").style.display =
+    document.getElementById("gradientTarget").value === "custom" ? "" : "none";
+}
+document.getElementById("gradientTarget").addEventListener("change",syncGradientUI);
+syncGradientUI();
+
+// CSV / TSV
+function parsePastedData(text){
+  const useTab = text.includes("\t");
+  return text.split(/\r?\n/).map(l=>{
+    const parts = useTab ? l.split("\t") : l.split(/[,;]/);
+    return {label:(parts[0]||"").trim(), value:+String(parts[1]||"").replace(/[, ]/g,""), color:null};
+  }).filter(r=>r.label && !isNaN(r.value));
+}
+document.getElementById("csvInput").addEventListener("input",e=>{
+  const text = e.target.value.trim(); if(!text) return;
+  const rows = parsePastedData(text);
+  if(rows.length){state.data=rows;renderTable();render();}
+});
+document.getElementById("dumpCsv").addEventListener("click",()=>{
+  const txt = state.data.map(d=>`${d.label},${d.value}`).join("\n");
+  navigator.clipboard.writeText(txt);
+  document.getElementById("csvInput").value = txt;
+});
+
+// JSON config
+document.getElementById("exportJson").addEventListener("click",()=>{
+  const out = {state, cfg:cfg()};
+  const blob = new Blob([JSON.stringify(out,null,2)],{type:"application/json"});
+  downloadBlob(blob,"bar-chart-config.json");
+});
+document.getElementById("importJson").addEventListener("click",()=>{
+  document.getElementById("jsonFile").click();
+});
+document.getElementById("jsonFile").addEventListener("change",e=>{
+  const file = e.target.files[0]; if(!file) return;
+  file.text().then(t=>{
+    try{
+      const j = JSON.parse(t);
+      if(j.state) Object.assign(state, j.state);
+      if(j.cfg) Object.entries(j.cfg).forEach(([k,v])=>{
+        const el = document.getElementById(k);
+        if(!el) return;
+        if(el.type==="checkbox") el.checked=!!v;
+        else {
+          el.value=v;
+          if(el.classList.contains("hex")){
+            const sw=el.parentElement.querySelector(".hex-sw");
+            if(sw && /^#[0-9a-fA-F]{6}$/.test(v)) sw.style.background=v;
+          }
+        }
+      });
+      syncColorModeUI(); syncGradientUI(); syncDomainUI();
+      renderPalette(); renderBucketTable(); renderTable(); render();
+    }catch(err){alert("Invalid JSON: "+err.message);}
+  });
+});
+
+// download buttons
+document.getElementById("downloadPng").addEventListener("click",()=>{
+  const s = +document.getElementById("pngScale").value || 2;
+  downloadPng(s);
+});
+document.getElementById("downloadSvg").addEventListener("click",downloadSvg);
+
+// pan / zoom
+(function setupPanZoom(){
+  const stage = document.querySelector(".stage");
+  const svgEl = document.getElementById("chart");
+  const view = {tx:0, ty:0, scale:1};
+  function apply(){
+    svgEl.style.transform = `translate(${view.tx}px,${view.ty}px) scale(${view.scale})`;
+    svgEl.style.transformOrigin = "center center";
+  }
+  function reset(){view.tx=0; view.ty=0; view.scale=1; apply();}
+  function zoomBy(f){view.scale = Math.max(0.2, Math.min(8, view.scale*f)); apply();}
+  stage.addEventListener("wheel", e=>{
+    if(e.target.closest(".stage-toolbar")) return;
+    e.preventDefault();
+    zoomBy(e.deltaY < 0 ? 1.1 : 1/1.1);
+  }, {passive:false});
+  let dragging=false, sx=0, sy=0;
+  stage.addEventListener("mousedown", e=>{
+    if(e.button!==0) return;
+    if(e.target.closest("button,select,input,.stage-toolbar")) return;
+    dragging=true; sx=e.clientX-view.tx; sy=e.clientY-view.ty;
+    stage.style.cursor="grabbing"; svgEl.style.pointerEvents="none";
+    e.preventDefault();
+  });
+  window.addEventListener("mousemove", e=>{
+    if(!dragging) return;
+    view.tx = e.clientX-sx; view.ty = e.clientY-sy; apply();
+  });
+  window.addEventListener("mouseup", ()=>{
+    if(!dragging) return;
+    dragging=false; stage.style.cursor="grab"; svgEl.style.pointerEvents="";
+  });
+  stage.addEventListener("dblclick", e=>{
+    if(e.target.closest("button,select,input,.stage-toolbar")) return;
+    reset();
+  });
+  document.getElementById("resetView").addEventListener("click",reset);
+  document.getElementById("zoomIn").addEventListener("click",()=>zoomBy(1.2));
+  document.getElementById("zoomOut").addEventListener("click",()=>zoomBy(1/1.2));
+  stage.style.cursor="grab";
+})();
+
+// init
+renderPalette();
+syncColorModeUI();
+renderBucketTable();
+renderTable();
+render();
+</script>
+</body>
+</html>

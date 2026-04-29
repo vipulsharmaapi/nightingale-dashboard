@@ -20,7 +20,14 @@
   }
   *{box-sizing:border-box}
   html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;font-size:13px}
-  .app{display:grid;grid-template-columns:340px 1fr 320px;height:100vh;overflow:hidden}
+  .topnav{display:flex;align-items:center;background:var(--panel);border-bottom:1px solid var(--border);padding:0 16px;gap:4px;height:46px;flex-shrink:0}
+  .topnav-brand{font-weight:600;margin-right:18px;color:var(--text);font-size:14px;letter-spacing:.02em}
+  .topnav-link{color:var(--muted);text-decoration:none;padding:7px 14px;border-radius:6px;font-size:13px;transition:background .12s,color .12s}
+  .topnav-link:hover{background:var(--panel-2);color:var(--text)}
+  .topnav-link.active{background:var(--accent);color:white}
+  .topnav-spacer{flex:1}
+  .topnav-meta{color:var(--muted);font-size:12px}
+  .app{display:grid;grid-template-columns:340px 1fr 320px;height:calc(100vh - 46px);overflow:hidden}
   .panel{background:var(--panel);border-right:1px solid var(--border);overflow-y:auto}
   .panel.right{border-right:none;border-left:1px solid var(--border)}
   .stage{display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--stage);position:relative;overflow:auto}
@@ -84,6 +91,13 @@
 </style>
 </head>
 <body>
+<nav class="topnav">
+  <div class="topnav-brand">Chart Studio</div>
+  <a href="index.html" class="topnav-link active">Nightingale Rose</a>
+  <a href="bar.html" class="topnav-link">Bar Chart</a>
+  <div class="topnav-spacer"></div>
+  <span class="topnav-meta">Drag stage to pan · scroll to zoom</span>
+</nav>
 <div class="app">
   <!-- LEFT PANEL: DATA -->
   <aside class="panel">
