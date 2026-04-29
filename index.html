@@ -467,6 +467,46 @@
     </div>
 
     <div class="group">
+      <h2>3D Effect</h2>
+      <div class="row">
+        <label>Enable 3D</label>
+        <input type="checkbox" id="threeDEnabled">
+      </div>
+      <div class="row">
+        <label>Depth (px)</label>
+        <input type="range" id="threeDDepth" min="0" max="80" value="22">
+        <span class="val" id="threeDDepthV"></span>
+      </div>
+      <div class="row">
+        <label>Tilt°</label>
+        <input type="range" id="threeDTilt" min="0" max="60" value="0">
+        <span class="val" id="threeDTiltV"></span>
+      </div>
+      <div class="row">
+        <label>Side darkness</label>
+        <input type="range" id="threeDDarkness" min="0" max="1.5" step="0.05" value="0.7">
+        <span class="val" id="threeDDarknessV"></span>
+      </div>
+      <div class="row">
+        <label>Side color</label>
+        <select id="threeDSideMode" style="flex:2">
+          <option value="auto" selected>Auto darker (per bar)</option>
+          <option value="custom">Single hex for all sides</option>
+        </select>
+      </div>
+      <div class="row" id="threeDSideHexRow" style="display:none">
+        <label>Hex</label>
+        <span class="hex-wrap"><span class="hex-sw" style="background:#333333"></span><input type="text" id="threeDSideColor" class="hex-input hex" value="#333333" maxlength="7"></span>
+      </div>
+      <div class="row">
+        <label>Smoothness</label>
+        <input type="range" id="threeDSmooth" min="0" max="1" step="0.05" value="0">
+        <span class="val" id="threeDSmoothV"></span>
+      </div>
+      <p class="hint">Stacked-layer extrusion. Increase depth for thicker bars, tilt for an oblique top-down view, smoothness to add a top-to-bottom side gradient.</p>
+    </div>
+
+    <div class="group">
       <h2>Gradient</h2>
       <div class="row">
         <label>Type</label>
@@ -653,6 +693,13 @@ function cfg(){
     showTooltip: $("showTooltip").checked,
     animMs: +$("animMs").value,
     shadow: $("shadow").checked,
+    threeDEnabled: $("threeDEnabled").checked,
+    threeDDepth: +$("threeDDepth").value,
+    threeDTilt: +$("threeDTilt").value,
+    threeDDarkness: +$("threeDDarkness").value,
+    threeDSideMode: $("threeDSideMode").value,
+    threeDSideColor: $("threeDSideColor").value,
+    threeDSmooth: +$("threeDSmooth").value,
     gradientType: $("gradientType").value,
     gradientTarget: $("gradientTarget").value,
     gradientCustom: $("gradientCustom").value,
@@ -858,7 +905,8 @@ function render(){
     }
   }
 
-  const g = svg.append("g").attr("transform",`translate(${cx},${cy})`);
+  const tiltSy = c.threeDEnabled ? Math.cos((c.threeDTilt||0) * Math.PI/180) : 1;
+  const g = svg.append("g").attr("transform",`translate(${cx},${cy}) scale(1,${tiltSy})`);
   if(c.shadow) g.attr("filter","url(#ng-shadow)");
 
   // angle scale (sectors)
@@ -976,7 +1024,31 @@ function render(){
     .innerRadius(inner)
     .outerRadius(d=>scale(+d.data.value));
 
-  // rotation: D3 arcs measure 0 = up, so we don't need extra rotation, but our spokes used -PI/2; D3 arc convention has 0 at 12 o'clock by default. Confirm.
+  // 3D extrusion (drawn BEFORE the top face so the top face covers the seam)
+  if(c.threeDEnabled && c.threeDDepth > 0){
+    const extG = g.append("g").attr("class","extrusion").style("pointer-events","none");
+    const layers = Math.round(c.threeDDepth);
+    arcs.forEach((a, i) => {
+      const baseColor = colorFor(a.data, i);
+      const sideC = c.threeDSideMode === "custom"
+        ? c.threeDSideColor
+        : d3.color(baseColor).darker(c.threeDDarkness).formatHex();
+      const arcD = arcGen(a);
+      for(let dy = layers; dy >= 1; dy--){
+        let fillC = sideC;
+        if(c.threeDSmooth > 0){
+          const t = (1 - dy / layers) * c.threeDSmooth;
+          fillC = d3.interpolateRgb(sideC, baseColor)(t);
+        }
+        extG.append("path")
+          .attr("d", arcD)
+          .attr("fill", fillC)
+          .attr("transform", `translate(0,${dy})`);
+      }
+    });
+  }
+
+  // rotation: D3 arcs measure 0 = up. D3 arc convention has 0 at 12 o'clock by default.
   const sel = g.append("g").selectAll("path").data(arcs).join("path")
     .attr("fill",(d,i)=>c.gradientType!=="off"?`url(#ng-grad-${i})`:colorFor(d.data,i))
     .attr("fill-opacity",c.opacity)
@@ -1069,8 +1141,9 @@ function render(){
     const availLeft = padding + (c.legendPos==="left"?legendBlock.w:0);
     const availTop = padding + (c.titlePos==="top"?titleH+subH:0) + (c.legendPos==="top"?legendBlock.h:0);
     const newCx = availLeft + availW/2 - (bb.x + bb.width/2);
-    const newCy = availTop + availH/2 - (bb.y + bb.height/2);
-    g.attr("transform", `translate(${newCx},${newCy})`);
+    // Account for scaleY (tilt) so bbox center lands at canvas center after scaling
+    const newCy = availTop + availH/2 - tiltSy*(bb.y + bb.height/2);
+    g.attr("transform", `translate(${newCx},${newCy}) scale(1,${tiltSy})`);
   } catch(e){ /* getBBox can throw if SVG not in DOM yet */ }
 
   // legend
@@ -1166,7 +1239,8 @@ function bindRange(id){
   "titleSize","subtitleSize","width","height","innerRadius","outerPct",
   "startAngle","endAngle","padAngle","padRadius","cornerRadius","opacity",
   "strokeWidth","labelSize","legendSize","animMs",
-  "centerSize","centerSubSize","gradientStrength"
+  "centerSize","centerSubSize","gradientStrength",
+  "threeDDepth","threeDTilt","threeDDarkness","threeDSmooth"
 ].forEach(bindRange);
 
 // Show/hide custom color picker for gradient
@@ -1176,6 +1250,14 @@ function syncGradientUI(){
 }
 document.getElementById("gradientTarget").addEventListener("change",syncGradientUI);
 syncGradientUI();
+
+// Show/hide custom side-color picker for 3D
+function sync3DUI(){
+  document.getElementById("threeDSideHexRow").style.display =
+    document.getElementById("threeDSideMode").value === "custom" ? "" : "none";
+}
+document.getElementById("threeDSideMode").addEventListener("change",sync3DUI);
+sync3DUI();
 
 document.querySelectorAll("input,select").forEach(el=>{
   if(el.id==="csvInput"||el.type==="file"||el.classList.contains("hex")) return;
