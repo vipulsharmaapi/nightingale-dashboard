@@ -612,6 +612,11 @@ let state = {
   buckets: DEFAULT_BUCKETS.map(b=>({...b})),
 };
 
+// Animation gate: true only on data-changing events (initial, presets, paste, sort).
+// Parameter tweaks (sliders, color changes, etc.) skip the animation so bars don't
+// flatten-and-regrow with every render.
+let _animateNext = true;
+
 /* ============================================================
    READ CONTROLS
 ============================================================ */
@@ -988,73 +993,7 @@ function render(){
     }
   }
 
-  // bars
-  const baseLine = vScale(0);
-  const bars = g.append("g").attr("class","bars").selectAll("path").data(data).join("path")
-    .attr("fill",(d,i)=>gradientFor(d,i,colorFor(d,i)))
-    .attr("fill-opacity",c.opacity)
-    .attr("stroke",c.strokeColor)
-    .attr("stroke-width",c.strokeWidth)
-    .attr("d",(d,i)=>{
-      const v = +d.value;
-      const startD = baseLine; // animation start
-      if(isVertical){
-        const x = cScale(d.label);
-        const w = cScale.bandwidth();
-        const y0 = vScale(0), y1 = vScale(v);
-        const top = Math.min(y0,y1), height = Math.abs(y1-y0);
-        const initial = `M${x},${startD}h${w}v0h${-w}z`;
-        return c.animMs>0 ? initial : barPath(x, top, w, height, c.cornerRadius, c.cornerSide);
-      } else {
-        const y = cScale(d.label);
-        const h = cScale.bandwidth();
-        const x0 = vScale(0), x1 = vScale(v);
-        const left = Math.min(x0,x1), width = Math.abs(x1-x0);
-        const initial = `M${startD},${y}h0v${h}h0z`;
-        return c.animMs>0 ? initial : barPath(left, y, width, h, c.cornerRadius, c.cornerSide);
-      }
-    })
-    .style("cursor","pointer");
-
-  if(c.animMs>0){
-    bars.transition().duration(c.animMs).ease(d3.easeCubicOut)
-      .attr("d",(d)=>{
-        const v=+d.value;
-        if(isVertical){
-          const x=cScale(d.label), w=cScale.bandwidth();
-          const y0=vScale(0), y1=vScale(v);
-          return barPath(x, Math.min(y0,y1), w, Math.abs(y1-y0), c.cornerRadius, c.cornerSide);
-        } else {
-          const y=cScale(d.label), h=cScale.bandwidth();
-          const x0=vScale(0), x1=vScale(v);
-          return barPath(Math.min(x0,x1), y, Math.abs(x1-x0), h, c.cornerRadius, c.cornerSide);
-        }
-      });
-  }
-
-  // hover
-  bars.on("mousemove",(ev,d)=>{
-    if(!c.showTooltip) return;
-    const pct = totalAbs ? ((Math.abs(+d.value)/totalAbs)*100).toFixed(1) : "0";
-    tooltip.innerHTML = `<strong>${d.label}</strong><br>Value: ${fmt(+d.value)||(+d.value)}<br>Share: ${pct}%`;
-    tooltip.style.opacity=1;
-    tooltip.style.left=(ev.clientX+12)+"px";
-    tooltip.style.top=(ev.clientY+12)+"px";
-  })
-  .on("mouseleave",()=>tooltip.style.opacity=0)
-  .on("mouseenter",function(){
-    if(!c.hoverHighlight) return;
-    bars.transition().duration(140).attr("fill-opacity",p=>p===d3.select(this).datum()?Math.min(1,c.opacity+0.1):c.opacity*0.4);
-  })
-  .on("mouseout",function(){
-    if(!c.hoverHighlight) return;
-    bars.transition().duration(140).attr("fill-opacity",c.opacity);
-  });
-
-  // gridlines on top of bars (if not behind)
-  if(!c.gridBehind) drawGrid();
-
-  // axes
+  // axes (drawn BEFORE bars so bars cover the baseline overlap)
   const axisLine = c.axisColor;
   if(c.showCategoryAxis){
     const ax = g.append("g").attr("class","axis-cat");
@@ -1090,6 +1029,73 @@ function render(){
     av.select(".domain").attr("stroke",axisLine).attr("stroke-width",c.axisWidth);
     av.selectAll("text").attr("fill",c.tickColor).attr("font-size",c.tickFontSize);
   }
+
+  // bars (drawn AFTER axes; animation only on data-load events)
+  const animMs = (_animateNext && c.animMs>0) ? c.animMs : 0;
+  const baseLine = vScale(0);
+  const bars = g.append("g").attr("class","bars").selectAll("path").data(data).join("path")
+    .attr("fill",(d,i)=>gradientFor(d,i,colorFor(d,i)))
+    .attr("fill-opacity",c.opacity)
+    .attr("stroke",c.strokeColor)
+    .attr("stroke-width",c.strokeWidth)
+    .attr("d",(d,i)=>{
+      const v = +d.value;
+      const startD = baseLine; // animation start
+      if(isVertical){
+        const x = cScale(d.label);
+        const w = cScale.bandwidth();
+        const y0 = vScale(0), y1 = vScale(v);
+        const top = Math.min(y0,y1), height = Math.abs(y1-y0);
+        const initial = `M${x},${startD}h${w}v0h${-w}z`;
+        return animMs>0 ? initial : barPath(x, top, w, height, c.cornerRadius, c.cornerSide);
+      } else {
+        const y = cScale(d.label);
+        const h = cScale.bandwidth();
+        const x0 = vScale(0), x1 = vScale(v);
+        const left = Math.min(x0,x1), width = Math.abs(x1-x0);
+        const initial = `M${startD},${y}h0v${h}h0z`;
+        return animMs>0 ? initial : barPath(left, y, width, h, c.cornerRadius, c.cornerSide);
+      }
+    })
+    .style("cursor","pointer");
+
+  if(animMs>0){
+    bars.transition().duration(animMs).ease(d3.easeCubicOut)
+      .attr("d",(d)=>{
+        const v=+d.value;
+        if(isVertical){
+          const x=cScale(d.label), w=cScale.bandwidth();
+          const y0=vScale(0), y1=vScale(v);
+          return barPath(x, Math.min(y0,y1), w, Math.abs(y1-y0), c.cornerRadius, c.cornerSide);
+        } else {
+          const y=cScale(d.label), h=cScale.bandwidth();
+          const x0=vScale(0), x1=vScale(v);
+          return barPath(Math.min(x0,x1), y, Math.abs(x1-x0), h, c.cornerRadius, c.cornerSide);
+        }
+      });
+  }
+
+  // hover
+  bars.on("mousemove",(ev,d)=>{
+    if(!c.showTooltip) return;
+    const pct = totalAbs ? ((Math.abs(+d.value)/totalAbs)*100).toFixed(1) : "0";
+    tooltip.innerHTML = `<strong>${d.label}</strong><br>Value: ${fmt(+d.value)||(+d.value)}<br>Share: ${pct}%`;
+    tooltip.style.opacity=1;
+    tooltip.style.left=(ev.clientX+12)+"px";
+    tooltip.style.top=(ev.clientY+12)+"px";
+  })
+  .on("mouseleave",()=>tooltip.style.opacity=0)
+  .on("mouseenter",function(){
+    if(!c.hoverHighlight) return;
+    bars.transition().duration(140).attr("fill-opacity",p=>p===d3.select(this).datum()?Math.min(1,c.opacity+0.1):c.opacity*0.4);
+  })
+  .on("mouseout",function(){
+    if(!c.hoverHighlight) return;
+    bars.transition().duration(140).attr("fill-opacity",c.opacity);
+  });
+
+  // gridlines on top of bars (if not behind)
+  if(!c.gridBehind) drawGrid();
 
   // axis labels
   if(c.valueAxisLabel){
@@ -1144,6 +1150,8 @@ function render(){
       if(c.labelRotate) t.attr("transform",`rotate(${c.labelRotate},${x},${y})`);
     });
   }
+
+  _animateNext = false;
 }
 
 /* ============================================================
@@ -1223,23 +1231,29 @@ document.querySelectorAll(".hex").forEach(el=>{
 
 document.getElementById("addRow").addEventListener("click",()=>{
   state.data.push({label:"New",value:50,color:null});
+  _animateNext = true;
   renderTable();render();
 });
 document.getElementById("sortDesc").addEventListener("click",()=>{
   state.data.sort((a,b)=>(+b.value)-(+a.value));
+  _animateNext = true;
   renderTable();render();
 });
 document.getElementById("sortAsc").addEventListener("click",()=>{
   state.data.sort((a,b)=>(+a.value)-(+b.value));
+  _animateNext = true;
   renderTable();render();
 });
 document.getElementById("reverseBtn").addEventListener("click",()=>{
-  state.data.reverse(); renderTable();render();
+  state.data.reverse();
+  _animateNext = true;
+  renderTable();render();
 });
 document.querySelectorAll("[data-preset]").forEach(b=>{
   b.addEventListener("click",()=>{
     state.data = PRESETS[b.dataset.preset].map(d=>({...d,color:null}));
     state.colorMode="palette";
+    _animateNext = true;
     syncColorModeUI(); renderTable(); render();
   });
 });
@@ -1253,6 +1267,7 @@ document.querySelectorAll("#orientToggle button").forEach(b=>{
   b.addEventListener("click",()=>{
     state.orientation = b.dataset.o;
     document.querySelectorAll("#orientToggle button").forEach(x=>x.classList.toggle("active",x===b));
+    _animateNext = true;
     render();
   });
 });
@@ -1296,7 +1311,7 @@ function parsePastedData(text){
 document.getElementById("csvInput").addEventListener("input",e=>{
   const text = e.target.value.trim(); if(!text) return;
   const rows = parsePastedData(text);
-  if(rows.length){state.data=rows;renderTable();render();}
+  if(rows.length){state.data=rows; _animateNext=true; renderTable();render();}
 });
 document.getElementById("dumpCsv").addEventListener("click",()=>{
   const txt = state.data.map(d=>`${d.label},${d.value}`).join("\n");
@@ -1331,6 +1346,7 @@ document.getElementById("jsonFile").addEventListener("change",e=>{
           }
         }
       });
+      _animateNext = true;
       syncColorModeUI(); syncGradientUI(); syncDomainUI();
       renderPalette(); renderBucketTable(); renderTable(); render();
     }catch(err){alert("Invalid JSON: "+err.message);}
