@@ -1,0 +1,1180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Nightingale Rose Chart Dashboard</title>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<style>
+  :root{
+    --bg:#f5f6f8;
+    --panel:#ffffff;
+    --panel-2:#f0f2f5;
+    --border:#e1e4ea;
+    --text:#1f2330;
+    --muted:#6b7280;
+    --accent:#6d4cff;
+    --accent-2:#0ea5b7;
+    --danger:#dc2626;
+    --ok:#059669;
+    --stage:#fafbfc;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;font-size:13px}
+  .app{display:grid;grid-template-columns:340px 1fr 320px;height:100vh;overflow:hidden}
+  .panel{background:var(--panel);border-right:1px solid var(--border);overflow-y:auto}
+  .panel.right{border-right:none;border-left:1px solid var(--border)}
+  .stage{display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--stage);position:relative;overflow:auto}
+  .stage-inner{padding:24px;display:flex;align-items:center;justify-content:center;width:100%;height:100%}
+  h1{font-size:14px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin:0;padding:16px 16px 8px;border-bottom:1px solid var(--border)}
+  .group{padding:12px 16px;border-bottom:1px solid var(--border)}
+  .group h2{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 10px;font-weight:600}
+  .row{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+  .row label{flex:1;color:var(--muted);font-size:12px}
+  .row .val{color:var(--text);font-variant-numeric:tabular-nums;min-width:42px;text-align:right;font-size:12px}
+  input[type="text"],input[type="number"],select,textarea{
+    background:var(--panel-2);border:1px solid var(--border);color:var(--text);
+    border-radius:6px;padding:6px 8px;font-size:12px;font-family:inherit;width:100%;
+  }
+  input[type="text"]:focus,input[type="number"]:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
+  input[type="range"]{flex:2;accent-color:var(--accent)}
+  input[type="color"]{background:none;border:1px solid var(--border);border-radius:6px;width:32px;height:24px;padding:0;cursor:pointer}
+  .hex-wrap{display:inline-flex;align-items:center;gap:6px;background:var(--panel-2);border:1px solid var(--border);border-radius:6px;padding:2px 6px;height:26px}
+  .hex-wrap.invalid{border-color:var(--danger)}
+  .hex-sw{width:14px;height:14px;border-radius:3px;border:1px solid var(--border);flex-shrink:0}
+  .hex-input{background:transparent;border:none;color:var(--text);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;width:64px;padding:0;text-transform:lowercase}
+  .hex-input:focus{outline:none}
+  td .hex-wrap{padding:1px 4px;height:22px}
+  td .hex-input{width:54px;font-size:10px}
+  input[type="checkbox"]{accent-color:var(--accent)}
+  button{background:var(--panel-2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px 10px;font-size:12px;cursor:pointer;font-family:inherit}
+  button:hover{border-color:var(--accent)}
+  button.primary{background:var(--accent);border-color:var(--accent);color:white}
+  button.primary:hover{filter:brightness(1.1)}
+  button.danger{color:var(--danger);border-color:transparent;background:transparent;padding:4px 6px}
+  button.danger:hover{background:rgba(239,68,68,.1)}
+  .btn-row{display:flex;gap:6px;flex-wrap:wrap}
+  table{width:100%;border-collapse:collapse;font-size:12px}
+  th,td{padding:4px;text-align:left;border-bottom:1px solid var(--border)}
+  th{color:var(--muted);font-weight:500;font-size:11px;text-transform:uppercase;letter-spacing:.05em}
+  td input{padding:4px 6px;font-size:12px}
+  td.color-cell{width:36px}
+  td.del-cell{width:28px;text-align:center}
+  .palette{display:flex;flex-wrap:wrap;gap:4px}
+  .palette button{padding:0;width:auto;border-radius:4px;overflow:hidden;border:1px solid var(--border);height:22px;display:flex;cursor:pointer}
+  .palette button.active{outline:2px solid var(--accent);outline-offset:1px}
+  .palette button > span{flex:1;height:100%}
+  .palette-name{flex-basis:100%;color:var(--muted);font-size:11px;margin-top:2px}
+  .seg-toggle{display:flex;background:var(--panel-2);border-radius:6px;padding:2px;border:1px solid var(--border)}
+  .seg-toggle button{flex:1;background:transparent;border:none;color:var(--muted);padding:5px 8px;border-radius:4px;font-size:11px}
+  .seg-toggle button.active{background:var(--accent);color:white}
+  .hint{color:var(--muted);font-size:11px;margin:4px 0 0;line-height:1.4}
+  .stage-toolbar{position:absolute;top:12px;right:12px;display:flex;gap:6px;z-index:10}
+  .stage-toolbar button{background:rgba(255,255,255,.95);backdrop-filter:blur(6px);box-shadow:0 1px 3px rgba(0,0,0,.06)}
+  .chart-tooltip{position:absolute;pointer-events:none;background:rgba(255,255,255,.98);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:12px;color:var(--text);box-shadow:0 8px 24px rgba(0,0,0,.12);opacity:0;transition:opacity .12s}
+  details{margin-bottom:8px}
+  details summary{cursor:pointer;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.05em;padding:4px 0;user-select:none}
+  details summary:hover{color:var(--text)}
+  details[open] summary{color:var(--text);margin-bottom:8px}
+  textarea{min-height:100px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;resize:vertical}
+  .scroll-x{overflow-x:auto}
+  .swatch{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:middle}
+  .num-input{width:70px}
+  .preset-row{display:flex;gap:4px;flex-wrap:wrap;margin-top:6px}
+  .preset-row button{font-size:11px;padding:3px 8px}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- LEFT PANEL: DATA -->
+  <aside class="panel">
+    <h1>Data</h1>
+    <div class="group">
+      <h2>Segments</h2>
+      <div class="scroll-x">
+        <table id="dataTable">
+          <thead><tr><th></th><th>Label</th><th>Value</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="btn-row" style="margin-top:8px">
+        <button id="addRow">+ Add row</button>
+        <button id="sortBtn">Sort by value</button>
+        <button id="reverseBtn">Reverse</button>
+      </div>
+    </div>
+
+    <div class="group">
+      <h2>Presets</h2>
+      <div class="preset-row">
+        <button data-preset="months">Months</button>
+        <button data-preset="weekdays">Weekdays</button>
+        <button data-preset="cardinal">Compass</button>
+        <button data-preset="hours">Hours of day</button>
+        <button data-preset="florence">Florence (1858)</button>
+        <button data-preset="healthcare">Healthcare (Ditto)</button>
+      </div>
+    </div>
+
+    <div class="group">
+      <h2>Import / Export</h2>
+      <details open>
+        <summary>Paste CSV / TSV (auto-loads)</summary>
+        <textarea id="csvInput" placeholder="Jan,40&#10;Feb,55&#10;Mar,70&#10;&#10;or tab-separated:&#10;Jan&#9;40"></textarea>
+        <div class="btn-row" style="margin-top:6px">
+          <button id="dumpCsv">Copy current as CSV</button>
+        </div>
+      </details>
+      <details>
+        <summary>Config JSON</summary>
+        <div class="btn-row" style="margin-top:6px">
+          <button id="exportJson">Export config</button>
+          <button id="importJson">Import config</button>
+          <input type="file" id="jsonFile" accept="application/json" hidden>
+        </div>
+      </details>
+    </div>
+  </aside>
+
+  <!-- CENTER: CHART STAGE -->
+  <main class="stage">
+    <div class="stage-toolbar">
+      <button id="downloadPng">PNG</button>
+      <button id="downloadSvg">SVG</button>
+      <button id="downloadHiPng">PNG @2x</button>
+    </div>
+    <div class="stage-inner">
+      <svg id="chart"></svg>
+    </div>
+    <div class="chart-tooltip" id="tooltip"></div>
+  </main>
+
+  <!-- RIGHT PANEL: STYLE -->
+  <aside class="panel right">
+    <h1>Customization</h1>
+
+    <div class="group">
+      <h2>Title</h2>
+      <div class="row"><input type="text" id="title" placeholder="Chart title" value="Nightingale Rose"></div>
+      <div class="row"><input type="text" id="subtitle" placeholder="Subtitle"></div>
+      <div class="row">
+        <label>Title size</label>
+        <input type="range" id="titleSize" min="10" max="48" value="22">
+        <span class="val" id="titleSizeV"></span>
+      </div>
+      <div class="row">
+        <label>Title color</label>
+        <span class="hex-wrap"><span class="hex-sw" style="background:#1f2330"></span><input type="text" id="titleColor" class="hex-input hex" value="#1f2330" maxlength="7"></span>
+        <label style="flex:0">Bold</label>
+        <input type="checkbox" id="titleBold" checked>
+      </div>
+      <div class="row">
+        <label>Subtitle size</label>
+        <input type="range" id="subtitleSize" min="8" max="24" value="13">
+        <span class="val" id="subtitleSizeV"></span>
+      </div>
+      <div class="row">
+        <label>Subtitle color</label>
+        <span class="hex-wrap"><span class="hex-sw" style="background:#8a93a6"></span><input type="text" id="subtitleColor" class="hex-input hex" value="#8a93a6" maxlength="7"></span>
+        <label style="flex:0">Position</label>
+        <select id="titlePos" style="flex:1">
+          <option value="top">Top</option>
+          <option value="bottom">Bottom</option>
+          <option value="none">Hidden</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="group">
+      <h2>Center Label</h2>
+      <div class="row"><input type="text" id="centerText" placeholder="Center text (e.g. brand)"></div>
+      <div class="row"><input type="text" id="centerSubtext" placeholder="Center subtext"></div>
+      <div class="row">
+        <label>Text size</label>
+        <input type="range" id="centerSize" min="8" max="60" value="20">
+        <span class="val" id="centerSizeV"></span>
+      </div>
+      <div class="row">
+        <label>Sub size</label>
+        <input type="range" id="centerSubSize" min="6" max="32" value="11">
+        <span class="val" id="centerSubSizeV"></span>
+      </div>
+      <div class="row">
+        <label>Color</label>
+        <span class="hex-wrap"><span class="hex-sw" style="background:#1f2330"></span><input type="text" id="centerColor" class="hex-input hex" value="#1f2330" maxlength="7"></span>
+        <label style="flex:0">Bold</label>
+        <input type="checkbox" id="centerBold" checked>
+      </div>
+      <div class="row">
+        <label>Sub color</label>
+        <span class="hex-wrap"><span class="hex-sw" style="background:#6b7280"></span><input type="text" id="centerSubColor" class="hex-input hex" value="#6b7280" maxlength="7"></span>
+      </div>
+    </div>
+
+    <div class="group">
+      <h2>Geometry</h2>
+      <div class="row">
+        <label>Width</label>
+        <input type="range" id="width" min="300" max="1400" value="640">
+        <span class="val" id="widthV"></span>
+      </div>
+      <div class="row">
+        <label>Height</label>
+        <input type="range" id="height" min="300" max="1400" value="640">
+        <span class="val" id="heightV"></span>
+      </div>
+      <div class="row">
+        <label>Inner radius</label>
+        <input type="range" id="innerRadius" min="0" max="80" value="0">
+        <span class="val" id="innerRadiusV"></span>
+      </div>
+      <div class="row">
+        <label>Outer radius %</label>
+        <input type="range" id="outerPct" min="40" max="100" value="90">
+        <span class="val" id="outerPctV"></span>
+      </div>
+      <div class="row">
+        <label>Start angle°</label>
+        <input type="range" id="startAngle" min="-360" max="360" value="0">
+        <span class="val" id="startAngleV"></span>
+      </div>
+      <div class="row">
+        <label>End angle°</label>
+        <input type="range" id="endAngle" min="-360" max="720" value="360">
+        <span class="val" id="endAngleV"></span>
+      </div>
+      <div class="row">
+        <label>Pad angle</label>
+        <input type="range" id="padAngle" min="0" max="0.1" step="0.005" value="0.01">
+        <span class="val" id="padAngleV"></span>
+      </div>
+      <div class="row">
+        <label>Pad radius</label>
+        <input type="range" id="padRadius" min="0" max="200" value="0">
+        <span class="val" id="padRadiusV"></span>
+      </div>
+      <div class="row">
+        <label>Corner radius</label>
+        <input type="range" id="cornerRadius" min="0" max="40" value="0">
+        <span class="val" id="cornerRadiusV"></span>
+      </div>
+      <div class="row">
+        <label>Radius scale</label>
+        <select id="scaleType">
+          <option value="sqrt" selected>Square root (classic)</option>
+          <option value="linear">Linear</option>
+          <option value="log">Log</option>
+          <option value="pow2">Power 2</option>
+        </select>
+      </div>
+      <div class="row">
+        <label>Sector width</label>
+        <select id="sectorMode">
+          <option value="equal" selected>Equal angles</option>
+          <option value="proportional">Proportional to value</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="group">
+      <h2>Colors</h2>
+      <div class="row">
+        <label>Mode</label>
+        <div class="seg-toggle" style="flex:2" id="colorModeToggle">
+          <button data-mode="palette" class="active">Palette</button>
+          <button data-mode="bucket">Buckets</button>
+          <button data-mode="custom">Custom</button>
+          <button data-mode="single">Single</button>
+        </div>
+      </div>
+      <div id="bucketWrap" style="display:none">
+        <table id="bucketTable" style="width:100%">
+          <thead><tr><th>≥ value</th><th>Color</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <div class="btn-row" style="margin-top:6px">
+          <button id="addBucket">+ Add bucket</button>
+          <button id="resetBuckets">Reset</button>
+        </div>
+        <p class="hint">Each row colors values ≥ its threshold. Sorted automatically.</p>
+      </div>
+      <div id="paletteWrap">
+        <div class="palette" id="palette"></div>
+        <div class="row" style="margin-top:8px">
+          <label>Reverse</label>
+          <input type="checkbox" id="paletteReverse">
+        </div>
+      </div>
+      <div class="row" id="singleColorWrap" style="display:none">
+        <label>Color</label>
+        <span class="hex-wrap"><span class="hex-sw" style="background:#7c5cff"></span><input type="text" id="singleColor" class="hex-input hex" value="#7c5cff" maxlength="7"></span>
+      </div>
+      <div class="row">
+        <label>Opacity</label>
+        <input type="range" id="opacity" min="0.1" max="1" step="0.05" value="1">
+        <span class="val" id="opacityV"></span>
+      </div>
+      <div class="row">
+        <label>Stroke</label>
+        <span class="hex-wrap"><span class="hex-sw" style="background:#ffffff"></span><input type="text" id="strokeColor" class="hex-input hex" value="#ffffff" maxlength="7"></span>
+        <input type="range" id="strokeWidth" min="0" max="6" step="0.5" value="1" style="flex:2">
+        <span class="val" id="strokeWidthV"></span>
+      </div>
+      <div class="row">
+        <label>Background</label>
+        <span class="hex-wrap"><span class="hex-sw" style="background:#ffffff"></span><input type="text" id="bgColor" class="hex-input hex" value="#ffffff" maxlength="7"></span>
+        <label style="flex:0">Transparent</label>
+        <input type="checkbox" id="bgTransparent">
+      </div>
+    </div>
+
+    <div class="group">
+      <h2>Grid &amp; Axis</h2>
+      <div class="row">
+        <label>Show rings</label>
+        <input type="checkbox" id="showRings" checked>
+        <label style="flex:0">Count</label>
+        <input type="number" id="ringCount" class="num-input" min="0" max="20" value="5">
+      </div>
+      <div class="row">
+        <label>Ring color</label>
+        <span class="hex-wrap"><span class="hex-sw" style="background:#cbd1da"></span><input type="text" id="ringColor" class="hex-input hex" value="#cbd1da" maxlength="7"></span>
+        <input type="range" id="ringOpacity" min="0" max="1" step="0.05" value="0.5" style="flex:2">
+      </div>
+      <div class="row">
+        <label>Ring labels</label>
+        <input type="checkbox" id="showRingLabels" checked>
+        <label style="flex:0">Color</label>
+        <span class="hex-wrap"><span class="hex-sw" style="background:#8a93a6"></span><input type="text" id="ringLabelColor" class="hex-input hex" value="#8a93a6" maxlength="7"></span>
+      </div>
+      <div class="row">
+        <label>Spokes</label>
+        <input type="checkbox" id="showSpokes">
+        <label style="flex:0">Color</label>
+        <span class="hex-wrap"><span class="hex-sw" style="background:#cbd1da"></span><input type="text" id="spokeColor" class="hex-input hex" value="#cbd1da" maxlength="7"></span>
+      </div>
+    </div>
+
+    <div class="group">
+      <h2>Labels</h2>
+      <div class="row">
+        <label>Show labels</label>
+        <input type="checkbox" id="showLabels" checked>
+        <label style="flex:0">Position</label>
+        <select id="labelPos" style="flex:1">
+          <option value="outside" selected>Outside</option>
+          <option value="inside">Inside</option>
+          <option value="tip">At tip</option>
+        </select>
+      </div>
+      <div class="row">
+        <label>Show value</label>
+        <input type="checkbox" id="showValues">
+        <label style="flex:0">Show %</label>
+        <input type="checkbox" id="showPct">
+      </div>
+      <div class="row">
+        <label>Font size</label>
+        <input type="range" id="labelSize" min="6" max="24" value="12">
+        <span class="val" id="labelSizeV"></span>
+      </div>
+      <div class="row">
+        <label>Color</label>
+        <span class="hex-wrap"><span class="hex-sw" style="background:#1f2330"></span><input type="text" id="labelColor" class="hex-input hex" value="#1f2330" maxlength="7"></span>
+        <label style="flex:0">Bold</label>
+        <input type="checkbox" id="labelBold">
+      </div>
+      <div class="row">
+        <label>Rotate to sector</label>
+        <input type="checkbox" id="labelRotate">
+        <label style="flex:0">Offset</label>
+        <input type="number" id="labelOffset" class="num-input" min="-50" max="100" value="12">
+      </div>
+      <div class="row">
+        <label>Font family</label>
+        <select id="fontFamily">
+          <option value="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif">System</option>
+          <option value="Georgia,serif">Georgia</option>
+          <option value="'Times New Roman',serif">Times</option>
+          <option value="'Courier New',monospace">Courier</option>
+          <option value="Helvetica,Arial,sans-serif">Helvetica</option>
+          <option value="'Comic Sans MS',cursive">Comic Sans</option>
+          <option value="Impact,sans-serif">Impact</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="group">
+      <h2>Legend</h2>
+      <div class="row">
+        <label>Show legend</label>
+        <input type="checkbox" id="showLegend">
+        <label style="flex:0">Position</label>
+        <select id="legendPos" style="flex:1">
+          <option value="right">Right</option>
+          <option value="bottom">Bottom</option>
+          <option value="left">Left</option>
+          <option value="top">Top</option>
+        </select>
+      </div>
+      <div class="row">
+        <label>Legend size</label>
+        <input type="range" id="legendSize" min="8" max="20" value="12">
+        <span class="val" id="legendSizeV"></span>
+      </div>
+    </div>
+
+    <div class="group">
+      <h2>Effects</h2>
+      <div class="row">
+        <label>Hover highlight</label>
+        <input type="checkbox" id="hoverHighlight" checked>
+        <label style="flex:0">Tooltip</label>
+        <input type="checkbox" id="showTooltip" checked>
+      </div>
+      <div class="row">
+        <label>Animation (ms)</label>
+        <input type="range" id="animMs" min="0" max="2000" step="50" value="700">
+        <span class="val" id="animMsV"></span>
+      </div>
+      <div class="row">
+        <label>Drop shadow</label>
+        <input type="checkbox" id="shadow">
+      </div>
+      <div class="row">
+        <label>Gradient fill</label>
+        <input type="checkbox" id="gradient">
+      </div>
+    </div>
+  </aside>
+</div>
+
+<script>
+/* ============================================================
+   STATE
+============================================================ */
+const PALETTES = {
+  Category10: d3.schemeCategory10,
+  Tableau10: d3.schemeTableau10,
+  Set2: d3.schemeSet2,
+  Set3: d3.schemeSet3,
+  Pastel1: d3.schemePastel1,
+  Dark2: d3.schemeDark2,
+  Viridis: d3.quantize(d3.interpolateViridis, 12),
+  Inferno: d3.quantize(d3.interpolateInferno, 12),
+  Magma: d3.quantize(d3.interpolateMagma, 12),
+  Plasma: d3.quantize(d3.interpolatePlasma, 12),
+  Cividis: d3.quantize(d3.interpolateCividis, 12),
+  Turbo: d3.quantize(d3.interpolateTurbo, 12),
+  Warm: d3.quantize(d3.interpolateWarm, 12),
+  Cool: d3.quantize(d3.interpolateCool, 12),
+  Rainbow: d3.quantize(d3.interpolateRainbow, 12),
+  Sinebow: d3.quantize(d3.interpolateSinebow, 12),
+  RdYlBu: d3.quantize(d3.interpolateRdYlBu, 12),
+  Spectral: d3.quantize(d3.interpolateSpectral, 12),
+  BuPu: d3.quantize(d3.interpolateBuPu, 12),
+  YlOrRd: d3.quantize(d3.interpolateYlOrRd, 12),
+};
+
+const PRESETS = {
+  months: [
+    {label:"Jan",value:34},{label:"Feb",value:42},{label:"Mar",value:55},
+    {label:"Apr",value:68},{label:"May",value:80},{label:"Jun",value:92},
+    {label:"Jul",value:88},{label:"Aug",value:75},{label:"Sep",value:61},
+    {label:"Oct",value:48},{label:"Nov",value:36},{label:"Dec",value:30}
+  ],
+  weekdays: [
+    {label:"Mon",value:55},{label:"Tue",value:62},{label:"Wed",value:71},
+    {label:"Thu",value:68},{label:"Fri",value:90},{label:"Sat",value:42},{label:"Sun",value:35}
+  ],
+  cardinal: [
+    {label:"N",value:60},{label:"NE",value:48},{label:"E",value:72},{label:"SE",value:55},
+    {label:"S",value:80},{label:"SW",value:44},{label:"W",value:66},{label:"NW",value:38}
+  ],
+  hours: Array.from({length:24},(_,i)=>({label:String(i).padStart(2,"0"),value:Math.round(20+40*Math.sin(i/24*Math.PI*2)+Math.random()*15)})),
+  florence: [
+    {label:"Apr 1854",value:1},{label:"May",value:12},{label:"Jun",value:11},
+    {label:"Jul",value:359},{label:"Aug",value:828},{label:"Sep",value:788},
+    {label:"Oct",value:503},{label:"Nov",value:844},{label:"Dec",value:1725},
+    {label:"Jan 1855",value:2761},{label:"Feb",value:2120},{label:"Mar",value:1205}
+  ],
+  healthcare: [
+    {label:"Apollo Hospitals",value:73716},
+    {label:"Max Healthcare",value:58605},
+    {label:"Fortis",value:23030},
+    {label:"Narayana Health",value:20120},
+    {label:"Dr Lal PathLabs",value:18399},
+    {label:"Medanta",value:17598},
+    {label:"KIMS Hospitals",value:14302},
+    {label:"Aster",value:14168},
+    {label:"Polymed",value:11033},
+    {label:"Rainbow Children's",value:9921},
+    {label:"Metropolis",value:7477},
+    {label:"HCG",value:5025},
+    {label:"Vijaya Diagnostic",value:4380},
+    {label:"Thyrocare",value:2762},
+    {label:"KMCH",value:2445}
+  ]
+};
+
+const DEFAULT_BUCKETS = [
+  {min:60000, color:"#b85fbf"},
+  {min:20000, color:"#1f2a6e"},
+  {min:11000, color:"#6b6bb3"},
+  {min:0,     color:"#4a8fcc"}
+];
+
+let state = {
+  data: PRESETS.months.map(d=>({...d,color:null})),
+  palette: "Viridis",
+  paletteReverse: false,
+  colorMode: "palette",
+  buckets: DEFAULT_BUCKETS.map(b=>({...b})),
+};
+
+/* ============================================================
+   READ ALL CONTROLS
+============================================================ */
+function cfg(){
+  const $ = id => document.getElementById(id);
+  return {
+    title: $("title").value,
+    subtitle: $("subtitle").value,
+    titleSize: +$("titleSize").value,
+    titleColor: $("titleColor").value,
+    titleBold: $("titleBold").checked,
+    subtitleSize: +$("subtitleSize").value,
+    subtitleColor: $("subtitleColor").value,
+    titlePos: $("titlePos").value,
+    centerText: $("centerText").value,
+    centerSubtext: $("centerSubtext").value,
+    centerSize: +$("centerSize").value,
+    centerSubSize: +$("centerSubSize").value,
+    centerColor: $("centerColor").value,
+    centerSubColor: $("centerSubColor").value,
+    centerBold: $("centerBold").checked,
+    width: +$("width").value,
+    height: +$("height").value,
+    innerRadius: +$("innerRadius").value,
+    outerPct: +$("outerPct").value,
+    startAngle: +$("startAngle").value,
+    endAngle: +$("endAngle").value,
+    padAngle: +$("padAngle").value,
+    padRadius: +$("padRadius").value,
+    cornerRadius: +$("cornerRadius").value,
+    scaleType: $("scaleType").value,
+    sectorMode: $("sectorMode").value,
+    opacity: +$("opacity").value,
+    strokeColor: $("strokeColor").value,
+    strokeWidth: +$("strokeWidth").value,
+    bgColor: $("bgColor").value,
+    bgTransparent: $("bgTransparent").checked,
+    showRings: $("showRings").checked,
+    ringCount: +$("ringCount").value,
+    ringColor: $("ringColor").value,
+    ringOpacity: +$("ringOpacity").value,
+    showRingLabels: $("showRingLabels").checked,
+    ringLabelColor: $("ringLabelColor").value,
+    showSpokes: $("showSpokes").checked,
+    spokeColor: $("spokeColor").value,
+    showLabels: $("showLabels").checked,
+    labelPos: $("labelPos").value,
+    showValues: $("showValues").checked,
+    showPct: $("showPct").checked,
+    labelSize: +$("labelSize").value,
+    labelColor: $("labelColor").value,
+    labelBold: $("labelBold").checked,
+    labelRotate: $("labelRotate").checked,
+    labelOffset: +$("labelOffset").value,
+    fontFamily: $("fontFamily").value,
+    showLegend: $("showLegend").checked,
+    legendPos: $("legendPos").value,
+    legendSize: +$("legendSize").value,
+    hoverHighlight: $("hoverHighlight").checked,
+    showTooltip: $("showTooltip").checked,
+    animMs: +$("animMs").value,
+    shadow: $("shadow").checked,
+    gradient: $("gradient").checked,
+    singleColor: $("singleColor").value,
+  };
+}
+
+/* ============================================================
+   DATA TABLE
+============================================================ */
+function renderTable(){
+  const tbody = document.querySelector("#dataTable tbody");
+  tbody.innerHTML = "";
+  state.data.forEach((d,i)=>{
+    const tr = document.createElement("tr");
+    const c0 = d.color||currentPaletteColor(i);
+    tr.innerHTML = `
+      <td class="color-cell"><span class="hex-wrap"><span class="hex-sw" style="background:${c0}"></span><input type="text" class="hex-input hex" value="${c0}" maxlength="7" data-i="${i}" data-k="color"></span></td>
+      <td><input type="text" value="${d.label}" data-i="${i}" data-k="label"></td>
+      <td><input type="number" value="${d.value}" step="any" data-i="${i}" data-k="value"></td>
+      <td class="del-cell"><button class="danger" data-del="${i}" title="Remove">×</button></td>`;
+    tbody.appendChild(tr);
+  });
+  tbody.querySelectorAll("input").forEach(inp=>{
+    inp.addEventListener("input",e=>{
+      const i=+e.target.dataset.i, k=e.target.dataset.k;
+      let v=e.target.value;
+      if(k==="color"){
+        if(!/^#[0-9a-fA-F]{6}$/.test(v)){
+          e.target.parentElement.classList.add("invalid");
+          return;
+        }
+        e.target.parentElement.classList.remove("invalid");
+        const sw=e.target.parentElement.querySelector(".hex-sw");
+        if(sw) sw.style.background=v;
+        state.data[i].color=v;
+        state.colorMode="custom"; syncColorModeUI();
+      } else {
+        if(k==="value") v=+v;
+        state.data[i][k]=v;
+      }
+      render();
+    });
+  });
+  tbody.querySelectorAll("[data-del]").forEach(btn=>{
+    btn.addEventListener("click",e=>{
+      const i=+e.target.dataset.del;
+      state.data.splice(i,1);
+      renderTable();render();
+    });
+  });
+}
+
+/* ============================================================
+   COLOR HELPERS
+============================================================ */
+function currentPaletteColor(i){
+  const arr = PALETTES[state.palette];
+  const idx = state.paletteReverse ? (arr.length-1-(i%arr.length)) : (i%arr.length);
+  return arr[idx];
+}
+function colorForBucket(value){
+  const sorted = [...state.buckets].sort((a,b)=>b.min-a.min);
+  for(const b of sorted){ if(value >= b.min) return b.color; }
+  return sorted[sorted.length-1]?.color || "#888";
+}
+function colorFor(d,i){
+  if(state.colorMode==="single") return cfg().singleColor;
+  if(state.colorMode==="custom" && d.color) return d.color;
+  if(state.colorMode==="bucket") return colorForBucket(+d.value);
+  return currentPaletteColor(i);
+}
+function renderPalette(){
+  const wrap = document.getElementById("palette");
+  wrap.innerHTML = "";
+  Object.entries(PALETTES).forEach(([name,colors])=>{
+    const btn = document.createElement("button");
+    btn.title = name;
+    btn.className = name===state.palette ? "active":"";
+    colors.slice(0,8).forEach(c=>{
+      const sp = document.createElement("span");
+      sp.style.background=c;
+      btn.appendChild(sp);
+    });
+    btn.addEventListener("click",()=>{
+      state.palette = name;
+      state.colorMode="palette";
+      syncColorModeUI();
+      renderPalette();
+      renderTable();
+      render();
+    });
+    wrap.appendChild(btn);
+  });
+}
+function syncColorModeUI(){
+  document.querySelectorAll("#colorModeToggle button").forEach(b=>{
+    b.classList.toggle("active", b.dataset.mode===state.colorMode);
+  });
+  document.getElementById("paletteWrap").style.display = state.colorMode==="palette"?"":"none";
+  document.getElementById("singleColorWrap").style.display = state.colorMode==="single"?"":"none";
+  document.getElementById("bucketWrap").style.display = state.colorMode==="bucket"?"":"none";
+}
+
+function renderBucketTable(){
+  const tbody = document.querySelector("#bucketTable tbody");
+  tbody.innerHTML = "";
+  state.buckets.sort((a,b)=>b.min-a.min);
+  state.buckets.forEach((b,i)=>{
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td><input type="number" value="${b.min}" step="any" data-bi="${i}" data-bk="min"></td>
+      <td><span class="hex-wrap"><span class="hex-sw" style="background:${b.color}"></span><input type="text" class="hex-input hex" value="${b.color}" maxlength="7" data-bi="${i}" data-bk="color"></span></td>
+      <td class="del-cell"><button class="danger" data-bdel="${i}" title="Remove">×</button></td>`;
+    tbody.appendChild(tr);
+  });
+  tbody.querySelectorAll("input").forEach(inp=>{
+    inp.addEventListener("input",e=>{
+      const i=+e.target.dataset.bi, k=e.target.dataset.bk;
+      let v=e.target.value;
+      if(k==="color"){
+        if(!/^#[0-9a-fA-F]{6}$/.test(v)){
+          e.target.parentElement.classList.add("invalid"); return;
+        }
+        e.target.parentElement.classList.remove("invalid");
+        const sw=e.target.parentElement.querySelector(".hex-sw");
+        if(sw) sw.style.background=v;
+        state.buckets[i].color=v;
+      } else {
+        state.buckets[i].min=+v;
+      }
+      render();
+    });
+  });
+  tbody.querySelectorAll("[data-bdel]").forEach(btn=>{
+    btn.addEventListener("click",e=>{
+      const i=+e.target.dataset.bdel;
+      state.buckets.splice(i,1);
+      renderBucketTable();render();
+    });
+  });
+}
+
+/* ============================================================
+   RENDER CHART
+============================================================ */
+const tooltip = document.getElementById("tooltip");
+
+function render(){
+  const c = cfg();
+  const data = state.data.filter(d=>!isNaN(+d.value));
+  if(!data.length){d3.select("#chart").selectAll("*").remove();return;}
+
+  const svg = d3.select("#chart")
+    .attr("width", c.width)
+    .attr("height", c.height)
+    .attr("viewBox",`0 0 ${c.width} ${c.height}`)
+    .style("background", c.bgTransparent?"transparent":c.bgColor)
+    .style("font-family", c.fontFamily);
+  svg.selectAll("*").remove();
+
+  // defs
+  const defs = svg.append("defs");
+  if(c.shadow){
+    const f = defs.append("filter").attr("id","ng-shadow").attr("x","-50%").attr("y","-50%").attr("width","200%").attr("height","200%");
+    f.append("feGaussianBlur").attr("in","SourceAlpha").attr("stdDeviation",4);
+    f.append("feOffset").attr("dx",0).attr("dy",2).attr("result","off");
+    const fm = f.append("feMerge");
+    fm.append("feMergeNode");
+    fm.append("feMergeNode").attr("in","SourceGraphic");
+  }
+
+  // layout regions
+  const padding = 20;
+  let titleH = 0, subH = 0;
+  if(c.titlePos!=="none"){
+    if(c.title) titleH = c.titleSize + 8;
+    if(c.subtitle) subH = c.subtitleSize + 8;
+  }
+  const legendBlock = c.showLegend ? legendSize(c, data) : {w:0,h:0};
+  const availW = c.width - padding*2 - (c.legendPos==="left"||c.legendPos==="right"?legendBlock.w:0);
+  const availH = c.height - padding*2 - titleH - subH - (c.legendPos==="top"||c.legendPos==="bottom"?legendBlock.h:0);
+  const cx = padding + (c.legendPos==="left"?legendBlock.w:0) + availW/2;
+  const cy = padding + (c.titlePos==="top"?titleH+subH:0) + (c.legendPos==="top"?legendBlock.h:0) + availH/2;
+
+  const outer = Math.max(20, Math.min(availW, availH)/2 * (c.outerPct/100));
+  const inner = Math.min(c.innerRadius, outer-10);
+
+  // title / subtitle
+  if(c.titlePos!=="none"){
+    const ty = c.titlePos==="top" ? padding+c.titleSize : c.height - padding - (c.subtitle?c.subtitleSize+6:0);
+    if(c.title){
+      svg.append("text").attr("x",c.width/2).attr("y",ty).attr("text-anchor","middle")
+        .attr("fill",c.titleColor).attr("font-size",c.titleSize)
+        .attr("font-weight",c.titleBold?700:500).text(c.title);
+    }
+    if(c.subtitle){
+      const sy = c.titlePos==="top" ? ty + c.subtitleSize + 4 : c.height - padding;
+      svg.append("text").attr("x",c.width/2).attr("y",sy).attr("text-anchor","middle")
+        .attr("fill",c.subtitleColor).attr("font-size",c.subtitleSize).text(c.subtitle);
+    }
+  }
+
+  const g = svg.append("g").attr("transform",`translate(${cx},${cy})`);
+  if(c.shadow) g.attr("filter","url(#ng-shadow)");
+
+  // angle scale (sectors)
+  const start = c.startAngle * Math.PI/180;
+  const end = c.endAngle * Math.PI/180;
+
+  let arcs;
+  if(c.sectorMode==="equal"){
+    const step = (end-start)/data.length;
+    arcs = data.map((d,i)=>({data:d,i,startAngle:start+step*i,endAngle:start+step*(i+1)}));
+  } else {
+    const total = d3.sum(data,d=>+d.value)||1;
+    let cur=start;
+    arcs = data.map((d,i)=>{
+      const a = (end-start)*((+d.value)/total);
+      const o = {data:d,i,startAngle:cur,endAngle:cur+a};
+      cur+=a;return o;
+    });
+  }
+
+  // radius scale
+  const maxV = d3.max(data,d=>+d.value)||1;
+  const minV = d3.min(data,d=>+d.value)||0;
+  let scale;
+  if(c.scaleType==="linear") scale = d3.scaleLinear().domain([0,maxV]).range([inner,outer]);
+  else if(c.scaleType==="log") scale = d3.scaleLog().domain([Math.max(minV,0.0001),maxV]).range([inner,outer]).clamp(true);
+  else if(c.scaleType==="pow2") scale = d3.scalePow().exponent(2).domain([0,maxV]).range([inner,outer]);
+  else scale = d3.scaleSqrt().domain([0,maxV]).range([inner,outer]);
+
+  // grid rings
+  if(c.showRings && c.ringCount>0){
+    const ticks = scale.ticks ? scale.ticks(c.ringCount) : d3.range(c.ringCount+1).map(i=>i*maxV/c.ringCount);
+    const ringG = g.append("g").attr("class","rings").attr("opacity",c.ringOpacity);
+    ticks.forEach(t=>{
+      const r = scale(t);
+      if(r<inner-1||r>outer+1) return;
+      ringG.append("circle").attr("r",r).attr("fill","none").attr("stroke",c.ringColor).attr("stroke-dasharray","2 3");
+      if(c.showRingLabels){
+        ringG.append("text").attr("x",0).attr("y",-r-2).attr("fill",c.ringLabelColor)
+          .attr("font-size",10).attr("text-anchor","middle").text(d3.format(".2~s")(t));
+      }
+    });
+  }
+
+  // spokes
+  if(c.showSpokes){
+    const sg = g.append("g").attr("opacity",0.6);
+    arcs.forEach(a=>{
+      const ang = a.startAngle - Math.PI/2;
+      sg.append("line").attr("x1",Math.cos(ang)*inner).attr("y1",Math.sin(ang)*inner)
+        .attr("x2",Math.cos(ang)*outer).attr("y2",Math.sin(ang)*outer)
+        .attr("stroke",c.spokeColor).attr("stroke-width",1);
+    });
+    // close last
+    const last = arcs[arcs.length-1];
+    if(last){
+      const ang = last.endAngle - Math.PI/2;
+      sg.append("line").attr("x1",Math.cos(ang)*inner).attr("y1",Math.sin(ang)*inner)
+        .attr("x2",Math.cos(ang)*outer).attr("y2",Math.sin(ang)*outer)
+        .attr("stroke",c.spokeColor).attr("stroke-width",1);
+    }
+  }
+
+  // gradients per segment
+  if(c.gradient){
+    arcs.forEach((a,i)=>{
+      const id = "ng-grad-"+i;
+      const grad = defs.append("radialGradient").attr("id",id).attr("cx","50%").attr("cy","50%").attr("r","50%");
+      const col = colorFor(a.data,i);
+      grad.append("stop").attr("offset","0%").attr("stop-color",d3.color(col).brighter(0.7).formatHex());
+      grad.append("stop").attr("offset","100%").attr("stop-color",col);
+    });
+  }
+
+  // arcs
+  const arcGen = d3.arc()
+    .padAngle(c.padAngle)
+    .padRadius(c.padRadius)
+    .cornerRadius(c.cornerRadius)
+    .innerRadius(inner)
+    .outerRadius(d=>scale(+d.data.value));
+
+  // rotation: D3 arcs measure 0 = up, so we don't need extra rotation, but our spokes used -PI/2; D3 arc convention has 0 at 12 o'clock by default. Confirm.
+  const sel = g.append("g").selectAll("path").data(arcs).join("path")
+    .attr("fill",(d,i)=>c.gradient?`url(#ng-grad-${i})`:colorFor(d.data,i))
+    .attr("fill-opacity",c.opacity)
+    .attr("stroke",c.strokeColor)
+    .attr("stroke-width",c.strokeWidth)
+    .style("cursor","pointer");
+
+  if(c.animMs>0){
+    sel.transition().duration(c.animMs).attrTween("d",function(d){
+      const i = d3.interpolate({...d,outerRadius:inner},{...d,outerRadius:scale(+d.data.value)});
+      return t=>arcGen({...d,outerRadius:i(t).outerRadius, data:d.data});
+    });
+    // fallback: provide static d after transition
+    sel.attr("d",d=>arcGen(d));
+  } else {
+    sel.attr("d",d=>arcGen(d));
+  }
+
+  // tooltip + hover
+  const total = d3.sum(data,d=>+d.value);
+  sel.on("mousemove",(ev,d)=>{
+      if(!c.showTooltip) return;
+      const pct = total?((+d.data.value/total)*100).toFixed(1):"0";
+      tooltip.innerHTML = `<strong>${d.data.label}</strong><br>Value: ${d.data.value}<br>Share: ${pct}%`;
+      tooltip.style.opacity=1;
+      tooltip.style.left=(ev.clientX+12)+"px";
+      tooltip.style.top=(ev.clientY+12)+"px";
+    })
+    .on("mouseleave",()=>tooltip.style.opacity=0)
+    .on("mouseenter",function(){
+      if(!c.hoverHighlight) return;
+      sel.transition().duration(150).attr("fill-opacity",p=>p===d3.select(this).datum()?Math.min(1,c.opacity+0.1):c.opacity*0.4);
+    })
+    .on("mouseout",function(){
+      if(!c.hoverHighlight) return;
+      sel.transition().duration(150).attr("fill-opacity",c.opacity);
+    });
+
+  // labels
+  if(c.showLabels){
+    const lg = g.append("g").attr("class","labels").style("pointer-events","none");
+    arcs.forEach((a,i)=>{
+      const mid = (a.startAngle+a.endAngle)/2 - Math.PI/2;
+      let r;
+      if(c.labelPos==="inside") r = (inner+scale(+a.data.value))/2;
+      else if(c.labelPos==="tip") r = scale(+a.data.value) - 8;
+      else r = outer + c.labelOffset;
+      const x = Math.cos(mid)*r, y = Math.sin(mid)*r;
+      let txt = a.data.label;
+      const parts = [a.data.label];
+      if(c.showValues) parts.push(d3.format(",")(+a.data.value));
+      if(c.showPct && total) parts.push(((+a.data.value/total)*100).toFixed(1)+"%");
+      txt = parts.join(" · ");
+      const t = lg.append("text").attr("x",x).attr("y",y)
+        .attr("text-anchor",c.labelPos==="outside"?(Math.cos(mid)>0?"start":"end"):"middle")
+        .attr("dominant-baseline","middle")
+        .attr("fill",c.labelColor)
+        .attr("font-size",c.labelSize)
+        .attr("font-weight",c.labelBold?700:400)
+        .text(txt);
+      if(c.labelRotate){
+        let deg = (a.startAngle+a.endAngle)/2*180/Math.PI - 90;
+        if(deg>90) deg-=180;
+        if(deg<-90) deg+=180;
+        t.attr("transform",`rotate(${deg},${x},${y})`);
+      }
+    });
+  }
+
+  // center label
+  if(c.centerText || c.centerSubtext){
+    const cg = g.append("g").attr("class","center-label").style("pointer-events","none");
+    if(c.centerText){
+      cg.append("text").attr("x",0).attr("y",c.centerSubtext?-(c.centerSubSize/2):0)
+        .attr("text-anchor","middle").attr("dominant-baseline","middle")
+        .attr("fill",c.centerColor).attr("font-size",c.centerSize)
+        .attr("font-weight",c.centerBold?700:500).text(c.centerText);
+    }
+    if(c.centerSubtext){
+      cg.append("text").attr("x",0).attr("y",c.centerText?(c.centerSize/2 + 2):0)
+        .attr("text-anchor","middle").attr("dominant-baseline","middle")
+        .attr("fill",c.centerSubColor).attr("font-size",c.centerSubSize).text(c.centerSubtext);
+    }
+  }
+
+  // legend
+  if(c.showLegend){
+    const lg = svg.append("g").attr("class","legend").style("font-size",c.legendSize+"px");
+    const items = arcs.map((a,i)=>({label:a.data.label,color:c.gradient?colorFor(a.data,i):colorFor(a.data,i)}));
+    const lh = c.legendSize+6;
+    let lx,ly;
+    if(c.legendPos==="right"){lx=c.width-padding-legendBlock.w; ly=padding+titleH+subH;}
+    else if(c.legendPos==="left"){lx=padding; ly=padding+titleH+subH;}
+    else if(c.legendPos==="top"){lx=c.width/2-legendBlock.w/2; ly=padding+titleH+subH;}
+    else {lx=c.width/2-legendBlock.w/2; ly=c.height-padding-legendBlock.h;}
+    items.forEach((it,i)=>{
+      let ix,iy;
+      if(c.legendPos==="right"||c.legendPos==="left"){ix=0;iy=i*lh;}
+      else {ix=i*(legendBlock.w/items.length);iy=0;}
+      const row = lg.append("g").attr("transform",`translate(${lx+ix},${ly+iy})`);
+      row.append("rect").attr("width",c.legendSize).attr("height",c.legendSize).attr("fill",it.color).attr("rx",2);
+      row.append("text").attr("x",c.legendSize+6).attr("y",c.legendSize-2).attr("fill",c.labelColor).text(it.label);
+    });
+  }
+}
+
+function legendSize(c, data){
+  if(c.legendPos==="left"||c.legendPos==="right"){
+    const w = 20 + Math.max(...data.map(d=>(d.label||"").length))*c.legendSize*0.6;
+    const h = data.length*(c.legendSize+6);
+    return {w,h};
+  } else {
+    const w = data.length * 80;
+    const h = c.legendSize+10;
+    return {w,h};
+  }
+}
+
+/* ============================================================
+   EXPORT
+============================================================ */
+function svgString(){
+  const node = document.getElementById("chart");
+  const clone = node.cloneNode(true);
+  clone.setAttribute("xmlns","http://www.w3.org/2000/svg");
+  return new XMLSerializer().serializeToString(clone);
+}
+function downloadBlob(blob, name){
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = name; a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+}
+function downloadSvg(){
+  const blob = new Blob([svgString()], {type:"image/svg+xml;charset=utf-8"});
+  downloadBlob(blob,"nightingale.svg");
+}
+function downloadPng(scale=1){
+  const c = cfg();
+  const svgStr = svgString();
+  const img = new Image();
+  img.onload = ()=>{
+    const canvas = document.createElement("canvas");
+    canvas.width = c.width*scale; canvas.height = c.height*scale;
+    const ctx = canvas.getContext("2d");
+    if(!c.bgTransparent){ctx.fillStyle=c.bgColor;ctx.fillRect(0,0,canvas.width,canvas.height);}
+    ctx.drawImage(img,0,0,canvas.width,canvas.height);
+    canvas.toBlob(b=>downloadBlob(b,`nightingale${scale>1?"@"+scale+"x":""}.png`));
+  };
+  img.src = "data:image/svg+xml;base64,"+btoa(unescape(encodeURIComponent(svgStr)));
+}
+
+/* ============================================================
+   WIRE UP
+============================================================ */
+function bindRange(id){
+  const el = document.getElementById(id);
+  const v = document.getElementById(id+"V");
+  const upd = ()=>{if(v) v.textContent = el.value;};
+  el.addEventListener("input",()=>{upd();render();});
+  upd();
+}
+[
+  "titleSize","subtitleSize","width","height","innerRadius","outerPct",
+  "startAngle","endAngle","padAngle","padRadius","cornerRadius","opacity",
+  "strokeWidth","labelSize","legendSize","animMs",
+  "centerSize","centerSubSize"
+].forEach(bindRange);
+
+document.querySelectorAll("input,select").forEach(el=>{
+  if(el.id==="csvInput"||el.type==="file"||el.classList.contains("hex")) return;
+  el.addEventListener("input",render);
+  el.addEventListener("change",render);
+});
+
+// hex inputs: validate, update swatch, render only when valid
+document.querySelectorAll(".hex").forEach(el=>{
+  if(el.dataset.k==="color") return; // handled in renderTable
+  el.addEventListener("input",e=>{
+    const v=e.target.value.trim();
+    if(!/^#[0-9a-fA-F]{6}$/.test(v)){
+      e.target.parentElement.classList.add("invalid");
+      return;
+    }
+    e.target.parentElement.classList.remove("invalid");
+    const sw=e.target.parentElement.querySelector(".hex-sw");
+    if(sw) sw.style.background=v;
+    render();
+  });
+});
+
+document.getElementById("addRow").addEventListener("click",()=>{
+  state.data.push({label:"New",value:50,color:null});
+  renderTable();render();
+});
+document.getElementById("sortBtn").addEventListener("click",()=>{
+  state.data.sort((a,b)=>(+b.value)-(+a.value));
+  renderTable();render();
+});
+document.getElementById("reverseBtn").addEventListener("click",()=>{
+  state.data.reverse();
+  renderTable();render();
+});
+document.querySelectorAll("[data-preset]").forEach(b=>{
+  b.addEventListener("click",()=>{
+    const key = b.dataset.preset;
+    state.data = PRESETS[key].map(d=>({...d,color:null}));
+    if(key==="healthcare"){
+      state.colorMode="bucket";
+      state.buckets = DEFAULT_BUCKETS.map(b=>({...b}));
+    } else {
+      state.colorMode="palette";
+    }
+    syncColorModeUI();
+    renderBucketTable();
+    renderTable();render();
+  });
+});
+document.querySelectorAll("#colorModeToggle button").forEach(b=>{
+  b.addEventListener("click",()=>{
+    state.colorMode = b.dataset.mode;
+    syncColorModeUI();render();renderTable();
+  });
+});
+document.getElementById("addBucket").addEventListener("click",()=>{
+  state.buckets.push({min:0,color:"#888888"});
+  renderBucketTable();render();
+});
+document.getElementById("resetBuckets").addEventListener("click",()=>{
+  state.buckets = DEFAULT_BUCKETS.map(b=>({...b}));
+  renderBucketTable();render();
+});
+document.getElementById("paletteReverse").addEventListener("change",e=>{
+  state.paletteReverse = e.target.checked;
+  renderTable();render();
+});
+
+function parsePastedData(text){
+  const useTab = text.includes("\t");
+  return text.split(/\r?\n/).map(l=>{
+    const parts = useTab ? l.split("\t") : l.split(/[,;]/);
+    return {label:(parts[0]||"").trim(), value:+String(parts[1]||"").replace(/[, ]/g,""), color:null};
+  }).filter(r=>r.label && !isNaN(r.value));
+}
+document.getElementById("csvInput").addEventListener("input",e=>{
+  const text = e.target.value.trim();
+  if(!text) return;
+  const rows = parsePastedData(text);
+  if(rows.length){state.data=rows;renderTable();render();}
+});
+document.getElementById("dumpCsv").addEventListener("click",()=>{
+  const txt = state.data.map(d=>`${d.label},${d.value}`).join("\n");
+  navigator.clipboard.writeText(txt);
+  document.getElementById("csvInput").value = txt;
+});
+
+document.getElementById("exportJson").addEventListener("click",()=>{
+  const out = {state, cfg:cfg()};
+  const blob = new Blob([JSON.stringify(out,null,2)],{type:"application/json"});
+  downloadBlob(blob,"nightingale-config.json");
+});
+document.getElementById("importJson").addEventListener("click",()=>{
+  document.getElementById("jsonFile").click();
+});
+document.getElementById("jsonFile").addEventListener("change",e=>{
+  const file = e.target.files[0]; if(!file) return;
+  file.text().then(t=>{
+    try{
+      const j = JSON.parse(t);
+      if(j.state) Object.assign(state, j.state);
+      if(j.cfg) Object.entries(j.cfg).forEach(([k,v])=>{
+        const el = document.getElementById(k);
+        if(!el) return;
+        if(el.type==="checkbox") el.checked=!!v;
+        else {
+          el.value=v;
+          if(el.classList.contains("hex")){
+            const sw=el.parentElement.querySelector(".hex-sw");
+            if(sw && /^#[0-9a-fA-F]{6}$/.test(v)) sw.style.background=v;
+          }
+        }
+      });
+      syncColorModeUI();renderPalette();renderTable();render();
+    }catch(err){alert("Invalid JSON: "+err.message);}
+  });
+});
+
+document.getElementById("downloadPng").addEventListener("click",()=>downloadPng(1));
+document.getElementById("downloadHiPng").addEventListener("click",()=>downloadPng(2));
+document.getElementById("downloadSvg").addEventListener("click",downloadSvg);
+
+// init
+renderPalette();
+syncColorModeUI();
+renderBucketTable();
+renderTable();
+render();
+</script>
+</body>
+</html>
