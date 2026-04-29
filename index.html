@@ -450,10 +450,46 @@
         <label>Drop shadow</label>
         <input type="checkbox" id="shadow">
       </div>
+    </div>
+
+    <div class="group">
+      <h2>Gradient</h2>
       <div class="row">
-        <label>Gradient fill</label>
-        <input type="checkbox" id="gradient">
+        <label>Type</label>
+        <select id="gradientType" style="flex:2">
+          <option value="off" selected>Off</option>
+          <option value="radial">Radial (from center)</option>
+          <option value="linear-tb">Linear ↓ top → bottom</option>
+          <option value="linear-bt">Linear ↑ bottom → top</option>
+          <option value="linear-lr">Linear → left to right</option>
+          <option value="linear-rl">Linear ← right to left</option>
+        </select>
       </div>
+      <div class="row">
+        <label>Fade to</label>
+        <select id="gradientTarget" style="flex:2">
+          <option value="lighter">Lighter shade</option>
+          <option value="darker" selected>Darker shade</option>
+          <option value="transparent">Transparent</option>
+          <option value="white">White</option>
+          <option value="black">Black</option>
+          <option value="custom">Custom color</option>
+        </select>
+      </div>
+      <div class="row" id="gradientCustomRow" style="display:none">
+        <label>Custom color</label>
+        <span class="hex-wrap"><span class="hex-sw" style="background:#ffffff"></span><input type="text" id="gradientCustom" class="hex-input hex" value="#ffffff" maxlength="7"></span>
+      </div>
+      <div class="row">
+        <label>Strength</label>
+        <input type="range" id="gradientStrength" min="0" max="1" step="0.05" value="0.6">
+        <span class="val" id="gradientStrengthV"></span>
+      </div>
+      <div class="row">
+        <label>Reverse direction</label>
+        <input type="checkbox" id="gradientReverse">
+      </div>
+      <p class="hint">Each bar starts at its own segment color and fades to the target. For a single shared gradient across all bars, set Colors → Mode = Single first.</p>
     </div>
   </aside>
 </div>
@@ -603,7 +639,11 @@ function cfg(){
     showTooltip: $("showTooltip").checked,
     animMs: +$("animMs").value,
     shadow: $("shadow").checked,
-    gradient: $("gradient").checked,
+    gradientType: $("gradientType").value,
+    gradientTarget: $("gradientTarget").value,
+    gradientCustom: $("gradientCustom").value,
+    gradientStrength: +$("gradientStrength").value,
+    gradientReverse: $("gradientReverse").checked,
     singleColor: $("singleColor").value,
   };
 }
@@ -869,13 +909,48 @@ function render(){
   }
 
   // gradients per segment
-  if(c.gradient){
+  function computeFadeColor(baseHex, c){
+    const s = c.gradientStrength;
+    const base = d3.color(baseHex);
+    switch(c.gradientTarget){
+      case "lighter":     return {color: base.brighter(s*2.2).formatHex(), opacity: 1};
+      case "darker":      return {color: base.darker(s*2.2).formatHex(),  opacity: 1};
+      case "transparent": return {color: baseHex,                          opacity: 1 - s};
+      case "white":       return {color: d3.interpolateRgb(baseHex,"#ffffff")(s), opacity: 1};
+      case "black":       return {color: d3.interpolateRgb(baseHex,"#000000")(s), opacity: 1};
+      case "custom":      return {color: d3.interpolateRgb(baseHex,c.gradientCustom||"#ffffff")(s), opacity: 1};
+      default:            return {color: baseHex, opacity: 1};
+    }
+  }
+  if(c.gradientType !== "off"){
+    const isRadial = c.gradientType === "radial";
+    const dirs = {
+      "linear-tb": {x1:0, y1:-outer, x2:0, y2:outer},
+      "linear-bt": {x1:0, y1:outer,  x2:0, y2:-outer},
+      "linear-lr": {x1:-outer, y1:0, x2:outer, y2:0},
+      "linear-rl": {x1:outer, y1:0,  x2:-outer, y2:0},
+    };
     arcs.forEach((a,i)=>{
       const id = "ng-grad-"+i;
-      const grad = defs.append("radialGradient").attr("id",id).attr("cx","50%").attr("cy","50%").attr("r","50%");
-      const col = colorFor(a.data,i);
-      grad.append("stop").attr("offset","0%").attr("stop-color",d3.color(col).brighter(0.7).formatHex());
-      grad.append("stop").attr("offset","100%").attr("stop-color",col);
+      const baseColor = colorFor(a.data,i);
+      const fade = computeFadeColor(baseColor, c);
+      const startC = c.gradientReverse ? fade.color : baseColor;
+      const endC   = c.gradientReverse ? baseColor  : fade.color;
+      const startOp= c.gradientReverse ? fade.opacity : 1;
+      const endOp  = c.gradientReverse ? 1 : fade.opacity;
+      let grad;
+      if(isRadial){
+        grad = defs.append("radialGradient").attr("id",id)
+          .attr("cx",0).attr("cy",0).attr("r",outer)
+          .attr("gradientUnits","userSpaceOnUse");
+      } else {
+        const d = dirs[c.gradientType];
+        grad = defs.append("linearGradient").attr("id",id)
+          .attr("x1",d.x1).attr("y1",d.y1).attr("x2",d.x2).attr("y2",d.y2)
+          .attr("gradientUnits","userSpaceOnUse");
+      }
+      grad.append("stop").attr("offset","0%").attr("stop-color",startC).attr("stop-opacity",startOp);
+      grad.append("stop").attr("offset","100%").attr("stop-color",endC).attr("stop-opacity",endOp);
     });
   }
 
@@ -889,7 +964,7 @@ function render(){
 
   // rotation: D3 arcs measure 0 = up, so we don't need extra rotation, but our spokes used -PI/2; D3 arc convention has 0 at 12 o'clock by default. Confirm.
   const sel = g.append("g").selectAll("path").data(arcs).join("path")
-    .attr("fill",(d,i)=>c.gradient?`url(#ng-grad-${i})`:colorFor(d.data,i))
+    .attr("fill",(d,i)=>c.gradientType!=="off"?`url(#ng-grad-${i})`:colorFor(d.data,i))
     .attr("fill-opacity",c.opacity)
     .attr("stroke",c.strokeColor)
     .attr("stroke-width",c.strokeWidth)
@@ -987,7 +1062,7 @@ function render(){
   // legend
   if(c.showLegend){
     const lg = svg.append("g").attr("class","legend").style("font-size",c.legendSize+"px");
-    const items = arcs.map((a,i)=>({label:a.data.label,color:c.gradient?colorFor(a.data,i):colorFor(a.data,i)}));
+    const items = arcs.map((a,i)=>({label:a.data.label,color:colorFor(a.data,i)}));
     const lh = c.legendSize+6;
     let lx,ly;
     if(c.legendPos==="right"){lx=c.width-padding-legendBlock.w; ly=padding+titleH+subH;}
@@ -1077,8 +1152,16 @@ function bindRange(id){
   "titleSize","subtitleSize","width","height","innerRadius","outerPct",
   "startAngle","endAngle","padAngle","padRadius","cornerRadius","opacity",
   "strokeWidth","labelSize","legendSize","animMs",
-  "centerSize","centerSubSize"
+  "centerSize","centerSubSize","gradientStrength"
 ].forEach(bindRange);
+
+// Show/hide custom color picker for gradient
+function syncGradientUI(){
+  document.getElementById("gradientCustomRow").style.display =
+    document.getElementById("gradientTarget").value === "custom" ? "" : "none";
+}
+document.getElementById("gradientTarget").addEventListener("change",syncGradientUI);
+syncGradientUI();
 
 document.querySelectorAll("input,select").forEach(el=>{
   if(el.id==="csvInput"||el.type==="file"||el.classList.contains("hex")) return;
